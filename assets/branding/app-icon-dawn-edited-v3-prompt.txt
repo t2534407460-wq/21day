@@ -1,0 +1,10 @@
+廿一 · 原绿色图标局部编辑 v3
+生成方式：内置 image_gen 编辑模式。
+编辑目标：assets/branding/app-icon-dawn-v1.png；保留原图。
+用户纠正：在原图标基础上修改，不采用重新设计的夜蓝表盘 v2。
+修改内容：在太阳内加入指针，收短水平线与下方弧线，原有配色和构图保持。
+
+Edit the supplied ORIGINAL green sunrise Android icon directly; it is the edit target, not just a style reference. This is a restrained refinement, NOT a new icon design.
+Preserve exactly the original full-bleed dark forest-green background, pale yellow-green rising sun, warm ivory horizontal stroke, sage lower arc, original layout, position, proportions, soft colors and quiet visual style. Keep the sun and the lower curved daily-rhythm stroke recognizably the same.
+Make only these targeted changes: 1) inside the pale sun, add TWO clean dark forest-green rounded clock hands and a small pivot, all comfortably contained within the sun. Their shared pivot is in the lower centre of the visible sun, with one shorter hand pointing toward 10 o'clock and the longer hand toward 1 o'clock. Their moderate stroke weight must match the original visual language and read clearly at small size; no numbers and no clock ring. 2) Shorten the original ivory horizon stroke so its ends stop at the left and right edges of the sun instead of protruding like a hat brim, and reduce its thickness slightly. 3) Keep the sage lower arc, only shorten its width to match the sun, preserving its curvature and placement.
+Preserve every other aspect of the original. Do not change to blue or orange. Do not add a surrounding dial, texture, rim, border, shadows, numerals, words, stars, moon, mockup or extra decorative elements. Output just the edited original square app icon.

@@ -1,0 +1,11 @@
+<resources>
+    <style name="Theme.Rhythm" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#F7F5EF</item>
+        <item name="android:navigationBarColor">#F7F5EF</item>
+        <item name="android:colorAccent">#536547</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+    <string name="accessibility_description">仅识别当前应用的包名，在你设定的夜间时段拦截你选定的娱乐应用。不读取屏幕文字、聊天内容或密码，不上传数据。你随时可以从系统设置关闭授权。</string>
+</resources>

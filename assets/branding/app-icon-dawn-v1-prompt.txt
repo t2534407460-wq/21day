@@ -1,0 +1,10 @@
+廿一 · 作息 — 晨光图标 v1
+生成方式：内置 image_gen（logo-brand），不透明背景。
+文件：app-icon-dawn-v1.png
+用途：原始应用图标设计稿；2026-10-03 经用户确认接入 Android 0.1.1 启动图标，原图与提示词保留。
+
+Final generation prompt:
+Use case: logo-brand.
+Asset type: final standalone Android app icon for a Chinese sleep-routine app named 廿一 · 作息 (21-day regular sleep and wake habits).
+Create ONE beautifully resolved, minimalist app icon, square 1024 x 1024, full bleed dark forest-green background (#283B32). A bold, memorable dawn symbol is centered: a large pale morning-lime (#E0E9AC) rising semicircular sun, a short warm-ivory horizon with rounded terminals beneath it, and one broad curved sage stroke below that gently echoes a daily cycle. Integrate these elements as one coherent custom geometric mark with generous negative space and balanced proportions, subtle optical refinement, calm and optimistic, mature editorial design. The mark occupies approximately 60 percent of the square and remains immediately legible at tiny launcher size. Crisp clean edges, flat solid color, no textures, no gradients, no shadows. The app is about reliably starting each new day, so the sunrise and rhythm are the sole visual idea.
+No typography, no letters, no numerals, no badges, no small decorative rays, no clock hands, no alarm-clock silhouette, no phone frame, no presentation mockup, no grid of options, no border, no rounded outer corners, no watermark. Background reaches all four image edges; produce the actual icon asset itself.

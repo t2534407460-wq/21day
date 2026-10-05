@@ -1,0 +1,11 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@android:id/background" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="12dp" android:background="@drawable/widget_background">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="48dp" android:gravity="center_vertical" android:orientation="horizontal" android:paddingHorizontal="4dp">
+        <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:orientation="vertical">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="廿一 · 今日卡组" android:textColor="@color/widget_header" android:textSize="14sp" android:textStyle="bold" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="上下滑动，切换习惯" android:textColor="@color/widget_header_muted" android:textSize="10sp" android:layout_marginTop="3dp" />
+        </LinearLayout>
+        <TextView android:id="@+id/widget_edit" android:layout_width="48dp" android:layout_height="36dp" android:gravity="center" android:text="编辑" android:textColor="@color/widget_header" android:background="@drawable/widget_edit_background" android:textSize="12sp" android:contentDescription="选择小组件习惯" />
+    </LinearLayout>
+    <!-- Keep positions inside the data set: looping StackView refreshes can clear wrapped cards. -->
+    <StackView android:id="@+id/widget_stack" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:loopViews="false" android:animateFirstView="false" />
+</LinearLayout>

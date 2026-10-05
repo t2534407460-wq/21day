@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background>
+        <shape android:shape="rectangle">
+            <solid android:color="#283B32" />
+        </shape>
+    </background>
+    <foreground>
+        <inset android:inset="12.5%">
+            <bitmap android:src="@drawable/launcher_dawn" android:gravity="fill" android:filter="true" />
+        </inset>
+    </foreground>
+</adaptive-icon>

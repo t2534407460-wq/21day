@@ -1,0 +1,6 @@
+<resources>
+    <color name="widget_background">#14271F</color>
+    <color name="widget_header">#EDF3E3</color><color name="widget_header_muted">#B1C3AC</color>
+    <color name="widget_card">#344E40</color><color name="widget_ink">#F2F5E8</color><color name="widget_muted">#CEDBC4</color><color name="widget_edge">#69816A</color>
+    <color name="widget_card_alt">#D8E3C5</color><color name="widget_ink_alt">#21382B</color><color name="widget_muted_alt">#4A5C43</color><color name="widget_edge_alt">#AEBF99</color>
+</resources>

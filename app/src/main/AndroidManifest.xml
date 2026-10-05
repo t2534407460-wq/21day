@@ -1,0 +1,90 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
+    <queries><intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent></queries>
+    <application android:name=".RhythmApplication" android:label="廿一" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:theme="@style/Theme.Rhythm" android:allowBackup="false" android:dataExtractionRules="@xml/data_extraction_rules" android:supportsRtl="true">
+        <meta-data android:name="miuiWidgetVersion" android:value="3" />
+        <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.updates" android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/update_paths" />
+        </provider>
+        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:excludeFromRecents="true" android:windowSoftInputMode="adjustResize">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity>
+        <activity android:name=".WakeActivity" android:exported="false" android:showWhenLocked="true" android:turnScreenOn="true" android:launchMode="singleTask" />
+        <activity android:name=".CoachActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".ReviewActivity" android:exported="false" />
+        <activity android:name=".WidgetDrawerActivity" android:exported="true" android:excludeFromRecents="true">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" /></intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="rhythm-widget" android:host="edit" />
+            </intent-filter>
+        </activity>
+        <service android:name=".CardWidgetService" android:permission="android.permission.BIND_REMOTEVIEWS" android:process=":widgetProvider" android:exported="false" />
+        <service android:name=".ReviewJobService" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="true" />
+        <service android:name=".ProjectSyncJob" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="true" />
+        <activity android:name=".ScannerActivity" android:exported="false" android:screenOrientation="portrait" android:theme="@style/Theme.Rhythm" />
+        <service android:name=".NightAccessibilityService" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true">
+            <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_service" />
+        </service>
+        <service android:name=".WakeAlarmService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
+        <receiver android:name=".AlarmReceiver" android:exported="false" />
+        <receiver android:name=".HabitReminderReceiver" android:exported="false" />
+        <receiver android:name=".WidgetCheckReceiver" android:exported="false" />
+        <receiver android:name=".BedtimeAdminReceiver" android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true" android:label="廿一 · 睡前超时锁屏">
+            <meta-data android:name="android.app.device_admin" android:resource="@xml/bedtime_admin" />
+            <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED" /></intent-filter>
+        </receiver>
+        <receiver android:name=".RescheduleReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
+        <receiver android:name=".RhythmWidget" android:exported="false" android:label="廿一 · 打卡卡组">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/rhythm_widget" />
+        </receiver>
+        <receiver android:name=".HyperOsWidget" android:exported="true" android:process=":widgetProvider" android:label="廿一 · 澎湃卡组">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /><action android:name="miui.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/rhythm_widget" />
+            <meta-data android:name="miuiWidget" android:value="true" />
+            <meta-data android:name="miuiWidgetRefresh" android:value="exposure" />
+            <meta-data android:name="miuiWidgetRefreshMinInterval" android:value="20000" />
+        </receiver>
+        <receiver android:name=".DataWidget" android:exported="false" android:process=":widgetProvider" android:label="廿一 · 数据卡 2×1">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/data_widget" />
+        </receiver>
+        <receiver android:name=".CheckWidget" android:exported="false" android:process=":widgetProvider" android:label="廿一 · 打卡按钮 2×2">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/check_widget" />
+        </receiver>
+        <receiver android:name=".HyperOsCheckWidget" android:exported="true" android:process=":widgetProvider" android:label="廿一 · 澎湃打卡 2×2">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /><action android:name="miui.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/check_widget" />
+            <meta-data android:name="miuiWidget" android:value="true" />
+            <meta-data android:name="miuiWidgetRefresh" android:value="exposure" />
+            <meta-data android:name="miuiWidgetRefreshMinInterval" android:value="20000" />
+        </receiver>
+    </application>
+</manifest>
