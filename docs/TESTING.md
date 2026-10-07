@@ -392,3 +392,9 @@ python tools/habit_deck_smoke.py
 
 ReleaseUpgradeTest仅在模拟器显式传入`-e releaseUpgrade seed|verify`时执行；先在真实0.11.0运行seed，再覆盖安装固定0.11.1运行verify。清空测试夹具后须执行旧版`migrateRestSchedule`模拟正常启动，再填用户规则；不能删除迁移标记后把再次启动的旧迁移当成数据丢失。本次有值数据、密文原件及实际解密均保留，`0.11.1-upgrade-preserved.log`。页面范围与实机边界见`docs/UX_AUDIT_0.11.1.md`。
 
+
+## 0.12.0最终验证结果
+
+2026-10-07完整构建、55项JVM、分批74项不同Android用例通过，Lint 0 errors / 119 warnings。公开0.11.2覆盖固定0.12.0/code20保持非空计划/规则/记录/计时/聊天报告/账号与验证点，旧Key实际解密通过。旧后台事件失败复现、遮罩取焦点诊断、测试旧标题/滚动/异步时序失败均保留，逐项复测，不称单次套件全绿。
+
+已公开[v0.12.0](https://github.com/t2534407460-wq/21day/releases/tag/v0.12.0)，匿名latest/资产元数据及实际下载SHA-256一致；大小63,255,458字节，文件hash 8cc716b42a0b2ccccada089c4ca15ecce8cc6e836c41722144f9c79d29ec5ffb，原证书。临时模拟器调休工作日日期恢复，实机测试仍待用户。详见本轮Debug，状态已修改待测试。
