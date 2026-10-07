@@ -40,9 +40,9 @@ class MainActivity : ComponentActivity() {
     var nfcListener: ((String)->Unit)?=null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); enableEdgeToEdge(); Alarms.schedule(this)
-        if(intent.action=="coach") coachRequest++;if(intent.action=="habits") habitRequest++
+        if(savedInstanceState==null) { if(intent.action=="coach") coachRequest++;if(intent.action=="habits") habitRequest++ }
         if(intent.action=="bedtime_record") bedtimeRequest++
-        if(intent.action=="ai_settings") { settingsTarget="AI 助手";settingsRequest++ }
+        if(savedInstanceState==null && intent.action=="ai_settings") { settingsTarget="AI 助手";settingsRequest++ }
         setContent { RhythmTheme { AppRoot(this) } }
     }
     override fun onNewIntent(intent:android.content.Intent) { super.onNewIntent(intent);setIntent(intent);if(intent.action=="coach") coachRequest++;if(intent.action=="habits") habitRequest++;if(intent.action=="bedtime_record") bedtimeRequest++;if(intent.action=="ai_settings") { settingsTarget="AI 助手";settingsRequest++ } }
@@ -66,6 +66,7 @@ class MainActivity : ComponentActivity() {
     val p=remember(revision) { s.plan }; val r=remember(revision) { s.rules }
     LaunchedEffect(now.toLocalDate(),s.pendingAt) { s.applyPending(); Alarms.schedule(activity) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    var journeySection by rememberSaveable { mutableIntStateOf(0) }
     var settingsCategory by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(activity.habitRequest) { if(activity.habitRequest>0) tab=2 }
     LaunchedEffect(activity.settingsRequest) { if(activity.settingsRequest>0) { settingsCategory=activity.settingsTarget;tab=5 } }
@@ -80,32 +81,41 @@ class MainActivity : ComponentActivity() {
     val pageState=rememberSaveableStateHolder()
     LaunchedEffect(activity.coachRequest) { if(activity.coachRequest>0) tab=4 }
     val scrollState=rememberScrollState()
-    LaunchedEffect(tab){scrollState.scrollTo(0)}
+    LaunchedEffect(tab){if(tab==3) { tab=1;journeySection=1 };scrollState.scrollTo(0)}
     Scaffold(modifier=Modifier.imePadding(),containerColor=Paper,bottomBar={
         if(WindowInsets.ime.getBottom(LocalDensity.current)==0) NavigationBar(containerColor=Paper,tonalElevation=0.dp) {
-            listOf("今天","21 天","习惯","变化","记录助手","设置").forEachIndexed { i,label ->
-                val icon=listOf(Icons.Outlined.WbSunny,Icons.Outlined.CalendarMonth,Icons.Outlined.CheckCircle,Icons.Outlined.Insights,Icons.Outlined.ChatBubbleOutline,Icons.Outlined.Tune)[i]
+            listOf(0 to "今天",1 to "21 天",2 to "习惯",4 to "记录助手",5 to "设置").forEach { (i,label) ->
+                val icon=when(i) { 0->Icons.Outlined.WbSunny;1->Icons.Outlined.CalendarMonth;2->Icons.Outlined.CheckCircle;4->Icons.Outlined.ChatBubbleOutline;else->Icons.Outlined.Tune }
                 NavigationBarItem(selected=tab==i,onClick={tab=i},icon={Icon(icon,label)},label={Text(label,fontSize=11.sp,maxLines=1)},colors=NavigationBarItemDefaults.colors(indicatorColor=Sage,selectedIconColor=Ink,selectedTextColor=Ink))
             }
         }
     }) { padding ->
         if(tab==4) pageState.SaveableStateProvider("coach") {
             CoachScreen(activity,Modifier.padding(padding).consumeWindowInsets(padding),onSettings={settingsCategory="AI 助手";tab=5})
-        } else if(tab==3) pageState.SaveableStateProvider("reviews") {
-            ReviewScreen(activity,Modifier.padding(padding).consumeWindowInsets(padding))
-        } else Column(Modifier.padding(padding).fillMaxSize().verticalScroll(scrollState).padding(horizontal=22.dp).padding(top=20.dp,bottom=28.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
-            when(tab) {
-                0,1->if(p==null) {
-                    Eyebrow("廿一 / 按自己的节奏来");Heading("从一个小习惯开始。")
-                    if(tab==0) HabitDeck(activity,now,revision,onManage={tab=2})
-                    DawnArt(Modifier.fillMaxWidth().height(170.dp))
-                    Sheet(color=Sage) { Text("想让作息更规律？",fontWeight=FontWeight.SemiBold);SmallNote("设定睡前时间，完成夜间打卡与醒后验证。");Primary("设置我的 21 天") { editor=true } }
-                    OutlinedButton(onClick={tab=2},modifier=Modifier.fillMaxWidth()) { Text("先去创建阅读、运动等习惯") }
-                    SmallNote("习惯模块可独立使用。21 天是启动与复盘周期，并非养成保证。")
-                } else if(tab==0) Today(activity,s,p,r,now,revision,onHabits={tab=2},onRecord={logDay=it},onSettings={tab=5},onPlan={tab=1})
-                    else PlanScreen(s,p,r,now,onDay={logDay=it},onEdit={editor=true},onRenew={renew=true;editor=true})
-                2->HabitScreen(activity,now.toLocalDate(),revision,scrollState,onSettings={settingsCategory="权限与后台";tab=5})
-                5->SettingsScreen(activity,s,r,activity.permissionRevision,settingsCategory,{settingsCategory=it},scrollState,onHabits={tab=2},onEdit={editor=true},onMessage={message=it},onPrivacy={showPrivacy=true})
+        } else Column(Modifier.padding(padding).consumeWindowInsets(padding).fillMaxSize()) {
+            if(tab==1) TabRow(selectedTabIndex=journeySection,containerColor=Paper,contentColor=Moss) {
+                listOf("作息进度","周总结","21天总结").forEachIndexed { index,label ->
+                    Tab(selected=journeySection==index,onClick={journeySection=index},text={Text(label)})
+                }
+            }
+            if(tab==1 && journeySection>0) pageState.SaveableStateProvider("reviews-$journeySection") {
+                ReviewScreen(activity,initialTab=if(journeySection==1) "week" else "cycle",showNavigation=false)
+            } else pageState.SaveableStateProvider(if(tab==1) "journey" else "main") {
+                Column(Modifier.fillMaxSize().verticalScroll(scrollState).padding(horizontal=22.dp).padding(top=20.dp,bottom=28.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
+                    when(tab) {
+                        0,1->if(p==null) {
+                            Eyebrow("廿一 / 按自己的节奏来");Heading("从一个小习惯开始。")
+                            if(tab==0) HabitDeck(activity,now,revision,onManage={tab=2})
+                            DawnArt(Modifier.fillMaxWidth().height(170.dp))
+                            Sheet(color=Sage) { Text("想让作息更规律？",fontWeight=FontWeight.SemiBold);SmallNote("设定睡前时间，完成夜间打卡与醒后验证。");Primary("设置我的 21 天") { editor=true } }
+                            OutlinedButton(onClick={tab=2},modifier=Modifier.fillMaxWidth()) { Text("先去创建阅读、运动等习惯") }
+                            SmallNote("习惯模块可独立使用。21 天是启动与复盘周期，并非养成保证。")
+                        } else if(tab==0) Today(activity,s,p,r,now,revision,onHabits={tab=2},onRecord={logDay=it},onSettings={tab=5},onPlan={journeySection=0;tab=1})
+                            else PlanScreen(s,p,r,now,onDay={logDay=it},onEdit={editor=true},onRenew={renew=true;editor=true})
+                        2->HabitScreen(activity,now.toLocalDate(),revision,scrollState,onSettings={settingsCategory="权限与后台";tab=5})
+                        5->SettingsScreen(activity,s,r,activity.permissionRevision,settingsCategory,{settingsCategory=it},scrollState,onHabits={tab=2},onEdit={editor=true},onMessage={message=it},onPrivacy={showPrivacy=true})
+                    }
+                }
             }
         }
     }

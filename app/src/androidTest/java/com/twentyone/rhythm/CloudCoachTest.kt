@@ -184,7 +184,7 @@ class CloudCoachTest {
         tap("补记");fillInput("今天07:35起床，精神一般");send("发送补记")
         assertTrue(device.wait(Until.hasObject(By.text("确认保存补记")),10000))
         assertEquals(before,store.log(day));device.takeScreenshot(File(c.filesDir,"cloud-coach-review.png"))
-        tap("变化");tap("记录助手")
+        tap("21 天");tap("周总结");tap("记录助手")
         assertTrue(device.wait(Until.hasObject(By.text("确认保存补记")),5000))
         assertEquals(before,store.log(day))
         tap("确认保存补记")

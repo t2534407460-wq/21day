@@ -27,7 +27,7 @@ class ReviewActivity:ComponentActivity() {
         ReviewScreen(this,Modifier.safeDrawingPadding(),intent.getStringExtra("tab") ?: "week",intent.getStringExtra("subject") ?: "",onBack={finish()})
     } } }
 }
-@Composable fun ReviewScreen(a:Context,modifier:Modifier=Modifier,initialTab:String="week",initialSubject:String="",onBack:(()->Unit)?=null) {
+@Composable fun ReviewScreen(a:Context,modifier:Modifier=Modifier,initialTab:String="week",initialSubject:String="",onBack:(()->Unit)?=null,showNavigation:Boolean=true) {
     val store=remember { ReviewStore(a) };val scope=rememberCoroutineScope();val now=clock()
     var revision by remember { mutableIntStateOf(0) };var tab by rememberSaveable { mutableStateOf(initialTab) };var subject by rememberSaveable { mutableStateOf(initialSubject) }
     var period by rememberSaveable { mutableStateOf("") }
@@ -44,9 +44,11 @@ class ReviewActivity:ComponentActivity() {
     val specs=all.filter { it.kind==tab && it.subject==selected?.subject }.sortedWith(compareBy<ReviewSpec> { it.due.isAfter(now) }.thenByDescending { it.from })
     val spec=specs.firstOrNull { it.id==period } ?: specs.firstOrNull()
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),verticalArrangement=Arrangement.spacedBy(18.dp)) {
-        Row(verticalAlignment=Alignment.CenterVertically) { if(onBack!=null) IconButton(onClick=onBack){Icon(Icons.AutoMirrored.Outlined.ArrowBack,"返回")};Heading("变化") }
-        TabRow(selectedTabIndex=if(tab=="week") 0 else 1,containerColor=Paper,contentColor=Moss) {
-            listOf("week" to "周总结","cycle" to "21天总结").forEach { (id,label) -> Tab(selected=tab==id,onClick={tab=id;period=""},text={Text(label)}) }
+        if(showNavigation) {
+            Row(verticalAlignment=Alignment.CenterVertically) { if(onBack!=null) IconButton(onClick=onBack){Icon(Icons.AutoMirrored.Outlined.ArrowBack,"返回")};Heading("变化") }
+            TabRow(selectedTabIndex=if(tab=="week") 0 else 1,containerColor=Paper,contentColor=Moss) {
+                listOf("week" to "周总结","cycle" to "21天总结").forEach { (id,label) -> Tab(selected=tab==id,onClick={tab=id;period=""},text={Text(label)}) }
+            }
         }
         if(subjects.isNotEmpty()) Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
             Box(Modifier.weight(1f)) {

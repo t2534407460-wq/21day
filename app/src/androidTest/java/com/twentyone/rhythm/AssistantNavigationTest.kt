@@ -27,7 +27,7 @@ class AssistantNavigationTest {
         assertNotNull(device.wait(Until.findObject(By.clazz("android.widget.EditText")),10000))
     }
     private fun tap(text:String) { device.wait(Until.findObject(By.text(text)),5000).click();device.waitForIdle();instrumentation.uiAutomation.clearCache() }
-    private fun capture(name:String) { device.takeScreenshot(java.io.File(c.getExternalFilesDir(null),"0.12.1-$name.png")) }
+    private fun capture(name:String) { device.takeScreenshot(java.io.File(c.getExternalFilesDir(null),"0.12.3-$name.png")) }
     @Test fun oldDisabledPreferenceNeverOffersSystemVoice() {
         ProjectPreferences.get(c,"coach_voice").edit().putBoolean("keyboard",false).commit()
         launch()
@@ -44,7 +44,7 @@ class AssistantNavigationTest {
         device.findObject(By.clazz("android.widget.EditText")).text="尚未发送的文字"
         device.waitForIdle()
         if(device.executeShellCommand("dumpsys input_method").contains("mInputShown=true"))device.pressBack()
-        tap("变化");assertTrue(device.hasObject(By.text("周总结")))
+        tap("21 天");tap("周总结");assertTrue(device.hasObject(By.text("周总结")))
         tap("记录助手")
         assertTrue(device.hasObject(By.text("尚未发送的文字")));assertFalse(device.hasObject(By.desc("语音输入")))
         assertTrue(CoachChat.load(c).isEmpty())
@@ -69,7 +69,7 @@ class AssistantNavigationTest {
         val specs=store.specs(c);val week=specs.last { it.kind=="week" }
         store.save(week.id,ReviewReport("done",answer="这一周已记录阅读"))
         store.save(specs.first { it.kind=="cycle" }.id,ReviewReport("done",answer="这一轮21天阅读总结"))
-        launch();tap("变化")
+        launch();tap("21 天");assertFalse(device.hasObject(By.desc("变化")));tap("周总结")
         assertTrue(device.hasObject(By.text("这一周已记录阅读")))
         assertFalse(device.hasObject(By.text("打开记录助手")))
         assertFalse(device.hasObject(By.text("最近的作息")))
@@ -77,7 +77,29 @@ class AssistantNavigationTest {
         capture("weekly")
         tap("21天总结");assertTrue(device.hasObject(By.text("这一轮21天阅读总结")))
         assertFalse(device.hasObject(By.text("这一周已记录阅读")));capture("cycle")
+        tap("作息进度");assertTrue(device.hasObject(By.text("设置我的 21 天")))
+        tap("21天总结");assertTrue(device.hasObject(By.text("这一轮21天阅读总结")))
         tap("记录助手");assertNotNull(device.findObject(By.clazz("android.widget.EditText")))
         assertTrue(device.hasObject(By.text("今天")));capture("assistant")
     }
+    @Test fun journeyKeepsSelectedWeekAcrossSummariesAndRotation() {
+        Store(c).createPlan(Plan(LocalDate.now()))
+        val before=Store(c).export()
+        launch();tap("21 天");tap("第 3 周")
+        assertTrue(device.hasObject(By.descStartsWith("第 21 天，")))
+        tap("周总结");tap("作息进度")
+        assertTrue(device.wait(Until.hasObject(By.descStartsWith("第 21 天，")),5000))
+        tap("21天总结")
+        try {
+            device.setOrientationLeft();device.waitForIdle()
+            assertTrue(device.wait(Until.hasObject(By.text("还没有21天总结")),5000))
+            capture("merged-landscape")
+        } finally { device.setOrientationNatural();device.unfreezeRotation() }
+        tap("习惯");tap("21 天")
+        assertTrue(device.wait(Until.hasObject(By.text("还没有21天总结")),5000))
+        tap("作息进度");capture("merged-progress")
+        assertTrue(device.hasObject(By.descStartsWith("第 21 天，")))
+        assertEquals(before,Store(c).export())
+    }
+
 }

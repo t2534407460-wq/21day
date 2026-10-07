@@ -89,7 +89,7 @@ class UsabilityFlowTest {
         tap("归档此计划");assertTrue(device.hasObject(By.text("归档阅读？")));tap("取消")
         device.pressBack();device.waitForIdle();instrumentation.uiAutomation.clearCache()
         tap("添加习惯");tap("取消")
-        tap("变化");capture("trends");tap("记录助手")
+        tap("21 天");tap("周总结");capture("trends");tap("记录助手")
         assertTrue(device.wait(Until.hasObject(By.text("记录助手")),3000))
         capture("coach");device.pressBack();device.waitForIdle()
         assertEquals(before,store.export())
