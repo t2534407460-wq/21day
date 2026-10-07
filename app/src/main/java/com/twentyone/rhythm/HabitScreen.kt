@@ -99,8 +99,9 @@ private fun frequency(days:Set<Int>)=if(days.size==7) "每天" else "每周"+day
     }
     val sleepStore=remember { Store(a) }
     val beforeBed=sleepStore.plan?.let { Schedule.nextWindDown(it,sleepStore.rules,LocalDateTime.now()) }?.let { it.hour*60+it.minute } ?: 22*60
-    if(create || editing!=null) HabitEditor(editing,seed,today,beforeBed,onDismiss={create=false;editing=null;seed=null}) { h ->
-        runCatching { store.save(h);changed() }.onSuccess { create=false;editing=null;seed=null;selected=h.id }.onFailure { message=it.message ?: "保存失败" }
+    val preserveToday=editing?.let { h -> entries.any { it.habitId==h.id && it.date==today } || store.running(h.id).let { it>0 && Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()==today } } ?: false
+    if(create || editing!=null) HabitEditor(editing,seed,today,beforeBed,preserveToday,onDismiss={create=false;editing=null;seed=null}) { h ->
+        runCatching { store.save(h);HabitReminders.cancelNotice(a,h.id);changed() }.onSuccess { create=false;editing=null;seed=null;selected=h.id }.onFailure { message=it.message ?: "保存失败" }
     }
     record?.let { (h,date) -> HabitRecordDialog(h,date,entries.find { it.habitId==h.id && it.date==date },onDismiss={record=null},onSave={ e ->
         runCatching { store.record(e);HabitReminders.cancelNotice(a,h.id);changed() }.onSuccess { record=null }.onFailure { message=it.message ?: "保存失败" }
@@ -190,7 +191,7 @@ private fun entrySummary(h:Habit,e:HabitEntry)=(if(h.mode==HabitMode.CHECK) if(e
     SmallNote("左：第1天 → 右：第21天 · 绿柱/点：实际${h.unit} · 棕线：目标；缺失留空")
 }
 
-@Composable private fun HabitEditor(original:Habit?,seed:Habit?,today:LocalDate,beforeBed:Int,onDismiss:()->Unit,onSave:(Habit)->Unit) {
+@Composable private fun HabitEditor(original:Habit?,seed:Habit?,today:LocalDate,beforeBed:Int,preserveToday:Boolean,onDismiss:()->Unit,onSave:(Habit)->Unit) {
     val initial=original ?: seed ?: habitTemplate("",today)
     val effective=if(original==null) today else maxOf(original.start,today.plusDays(1))
     var name by rememberSaveable { mutableStateOf(initial.name) };var mode by rememberSaveable { mutableStateOf(initial.mode.name) }
@@ -223,7 +224,10 @@ private fun entrySummary(h:Habit,e:HabitEntry)=(if(h.mode==HabitMode.CHECK) if(e
                         if(input==HabitInput.COUNT.name && !smoking) Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                             listOf(HabitMode.AT_LEAST,HabitMode.AT_MOST).forEach { kind -> FilterChip(mode==kind.name,{mode=kind.name},label={Text(kind.label)},colors=FilterChipDefaults.filterChipColors(selectedContainerColor=Sage,selectedLabelColor=Ink)) }
                         }
-                    } else SmallNote("本轮：${original.input.label} · ${original.mode.label}（${original.unit}）。目标、频率和提醒从 $effective 生效，过去与今天保持原安排。")
+                    } else {
+                        SmallNote("执行星期和提醒时间保存后同步更新；目标从 $effective 生效，过去记录保持不变。")
+                        if(preserveToday) SmallNote("今天已有记录或正在计时，取消今天的执行安排会从明天生效。")
+                    }
                     SmallNote(when(HabitInput.valueOf(input)) { HabitInput.TIMER->"长按开始与结束，累计实际分钟并保留时段。";HabitInput.COUNT->"每次长按记录 1 $unit，一天内累计；不会按住连加。";HabitInput.DAILY->if(smoking) "每日睡前长按确认零支；未打卡不会自动算零。" else "每天长按确认一次。";HabitInput.MANUAL->"填写当天实际总量。" })
                     if(mode!=HabitMode.CHECK.name && input!=HabitInput.DAILY.name) {
                         OutlinedTextField(target,{target=it.take(6)},label={Text(if(mode==HabitMode.AT_MOST.name) "每日上限（可为0）" else "每日目标")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number),singleLine=true,modifier=Modifier.fillMaxWidth())
@@ -248,7 +252,7 @@ private fun entrySummary(h:Habit,e:HabitEntry)=(if(h.mode==HabitMode.CHECK) if(e
                         val rule=HabitRule(if(original==null) date ?: today else effective,days,count ?: -1,if(reminder) minute else null)
                         if(name.isBlank() || unit.isBlank() || date==null || !rule.valid(chosen) || (reminder && minute==null) || (original==null && date<today)) error="请填写名称、有效目标，并至少选择一天。"
                         else onSave(if(original==null) Habit(name=name.trim(),start=date,mode=chosen,unit=if(chosen==HabitMode.CHECK) "次" else unit.trim(),rules=listOf(rule),input=HabitInput.valueOf(input),smoking=smoking,visual=HabitVisual.valueOf(visual))
-                            else original.copy(name=name.trim(),rules=original.rules.filter { it.from<effective }+rule))
+                            else original.revised(name.trim(),days,count ?: -1,if(reminder) minute else null,today,preserveToday))
                     }) { Text("保存习惯") }
                 }
             }

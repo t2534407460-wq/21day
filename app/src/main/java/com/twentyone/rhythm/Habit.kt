@@ -30,6 +30,14 @@ data class Habit(val id:String=UUID.randomUUID().toString(),val name:String,val 
     fun dates()=(0L..20L).map { start.plusDays(it) }
     fun reached(date:LocalDate,value:Int)=when(mode) { HabitMode.CHECK->value==1;HabitMode.AT_LEAST->value>=rule(date).target;HabitMode.AT_MOST->value<=rule(date).target }
     fun goal(date:LocalDate)=when(mode) { HabitMode.CHECK->"完成一次";HabitMode.AT_LEAST->"至少 ${rule(date).target} $unit";HabitMode.AT_MOST->"不超过 ${rule(date).target} $unit" }
+    fun revised(name:String,days:Set<Int>,target:Int,reminder:Int?,today:LocalDate,preserveToday:Boolean=false):Habit {
+        val from=maxOf(start,today)
+        val current=HabitRule(from,if(preserveToday && scheduled(today)) days+today.dayOfWeek.value else days,
+            if(from>today) target else rule(today).target,reminder)
+        val next=current.copy(from=maxOf(start,today.plusDays(1)),days=days,target=target)
+        return copy(name=name,rules=rules.filter { it.from<from }+current+
+            if(next.from>from && next.from<=end && (next.days!=current.days || next.target!=current.target)) listOf(next) else emptyList())
+    }
     fun valid()=runCatching { UUID.fromString(id); true }.getOrDefault(false) && name.isNotBlank() && name.length<=40 && unit.isNotBlank() && unit.length<=8 &&
         rules.isNotEmpty() && rules.size<=21 && rules.first().from==start && rules.map { it.from }==rules.map { it.from }.distinct().sorted() &&
         rules.all { it.from in start..end && it.valid(mode) } &&

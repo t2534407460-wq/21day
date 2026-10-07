@@ -20,7 +20,10 @@ class HabitStore(private val context:Context) {
             require(h.archivedOn==null || h.archivedOn==today) { "归档日期应为今天" }
             require(h.start==old.start && h.mode==old.mode && h.unit==old.unit && h.input==old.input && h.smoking==old.smoking) { "计量方式和开始日期在本轮中保持不变" }
             require(h.archivedOn==null || running(h.id)==0L) { "请先结束或取消本次计时，再归档" }
-            require(old.dates().filter { it<=today }.all { old.rule(it)==h.rule(it) }) { "调整只能从明天起生效" }
+            require(old.dates().filter { it<today }.all { old.rule(it)==h.rule(it) } &&
+                (today !in old.start..old.end || old.rule(today).target==h.rule(today).target)) { "过去的安排和今天的目标保持不变" }
+            require(entries().filter { it.habitId==h.id }.all { h.scheduled(it.date) } &&
+                (timers().optJSONObject(h.id)?.optString("day")?.let { h.scheduled(LocalDate.parse(it)) } ?: true)) { "已记录或正在计时的日期需要保留" }
         }
         write(if(old==null) all+h else all.map { if(it.id==h.id) h else it },entries())
         if(old!=h) Store(context).event(if(old==null) "新建习惯" else if(h.archived) "归档习惯" else "调整习惯","${h.name} · ${h.start} 至 ${h.end} · ${h.goal(h.rules.last().from)}")

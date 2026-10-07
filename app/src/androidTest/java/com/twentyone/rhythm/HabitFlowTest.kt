@@ -23,7 +23,10 @@ class HabitFlowTest {
         launch();tap("添加习惯");tap("阅读");tap("保存习惯")
         assertNull(s.plan);assertEquals(1,hs.habits().size)
         tap("手动填写今日总量");device.wait(Until.findObject(By.clazz("android.widget.EditText")),7000).text="25"
-        tap("保存打卡");assertEquals(25,hs.entries().single().value)
+        tap("保存打卡")
+        val until=System.currentTimeMillis()+5000
+        while(hs.entries().isEmpty() && System.currentTimeMillis()<until)Thread.sleep(50)
+        assertEquals(25,hs.entries().single().value)
         tap("修改今日记录");device.wait(Until.findObject(By.clazz("android.widget.EditText")),7000).text="10";tap("保存打卡")
         assertEquals(1,hs.entries().size);assertEquals(10,hs.entries().single().value)
         device.takeScreenshot(java.io.File(c.getExternalFilesDir(null),"0.7.0-habit-detail.png"))
