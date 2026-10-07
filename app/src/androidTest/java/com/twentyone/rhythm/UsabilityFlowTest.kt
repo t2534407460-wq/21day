@@ -68,8 +68,8 @@ class UsabilityFlowTest {
             }
             if(category=="习惯与复盘") {
                 tap("复盘看板")
-                assertTrue(device.wait(Until.hasObject(By.text("每周复盘")),5000))
-                tap("21天复盘");capture("review-21-days");tap("每周复盘");capture("review-weekly")
+                assertTrue(device.wait(Until.hasObject(By.text("周总结")),5000))
+                tap("21天总结");capture("review-21-days");tap("周总结");capture("review-weekly")
                 device.pressBack();device.waitForIdle();instrumentation.uiAutomation.clearCache()
                 assertTrue(device.wait(Until.hasObject(By.text(content)),5000))
             }
@@ -89,7 +89,7 @@ class UsabilityFlowTest {
         tap("归档此计划");assertTrue(device.hasObject(By.text("归档阅读？")));tap("取消")
         device.pressBack();device.waitForIdle();instrumentation.uiAutomation.clearCache()
         tap("添加习惯");tap("取消")
-        tap("变化");capture("trends");tap("打开记录助手")
+        tap("变化");capture("trends");tap("记录助手")
         assertTrue(device.wait(Until.hasObject(By.text("记录助手")),3000))
         capture("coach");device.pressBack();device.waitForIdle()
         assertEquals(before,store.export())

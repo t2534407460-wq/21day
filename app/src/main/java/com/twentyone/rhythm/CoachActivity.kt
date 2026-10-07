@@ -1,14 +1,8 @@
 package com.twentyone.rhythm
 
-import android.app.Activity
 import android.os.Bundle
 import android.content.Intent
-import android.content.ActivityNotFoundException
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,12 +11,12 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -36,31 +30,30 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.*
 import org.json.JSONObject
 import java.time.*
 import java.time.format.DateTimeFormatter
 
 class CoachActivity:ComponentActivity() {
-    var cancelGeneration:(()->Unit)?=null
-    var settingsRevision by mutableIntStateOf(0)
     override fun onCreate(savedInstanceState:Bundle?) {
-        super.onCreate(savedInstanceState);enableEdgeToEdge()
-        setContent { RhythmTheme { CoachScreen(this) } }
+        super.onCreate(savedInstanceState)
+        startActivity(Intent(this,MainActivity::class.java).setAction("coach").addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+        finish()
     }
-    override fun onResume() { super.onResume();settingsRevision++ }
-    override fun onPause() { cancelGeneration?.invoke();super.onPause() }
 }
 
-@Composable private fun CoachScreen(a:CoachActivity) {
+@Composable fun CoachScreen(a:ComponentActivity,modifier:Modifier=Modifier,onSettings:()->Unit) {
     val store=remember { Store(a) };val scope=rememberCoroutineScope()
     val habits=remember { HabitStore(a) }
     val keyboard=LocalSoftwareKeyboardController.current
     val inputFocus=remember { FocusRequester() }
     val voicePrefs=remember { ProjectPreferences.get(a,"coach_voice") }
-    var keyboardVoice by remember { mutableStateOf(voicePrefs.getBoolean("keyboard",true)) }
+    var voiceEnabled by remember { mutableStateOf(CoachChat.voiceEnabled(a)) }
     var keyboardRequest by remember { mutableIntStateOf(0) }
-    var voiceFallback by remember { mutableStateOf(false) }
     val keyboardVisible=WindowInsets.ime.getBottom(LocalDensity.current)>0
     val shortScreen=LocalConfiguration.current.screenHeightDp<480
     val compact=shortScreen || keyboardVisible
@@ -69,7 +62,7 @@ class CoachActivity:ComponentActivity() {
     DisposableEffect(Unit) {
         val listener=android.content.SharedPreferences.OnSharedPreferenceChangeListener { _,_->revision++ }
         store.prefs.registerOnSharedPreferenceChangeListener(listener)
-        onDispose { store.prefs.unregisterOnSharedPreferenceChangeListener(listener);a.cancelGeneration=null }
+        onDispose { store.prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
     val today=clock().toLocalDate()
     var historyFrom by rememberSaveable { mutableStateOf(today.minusDays(6).toString()) }
@@ -77,10 +70,18 @@ class CoachActivity:ComponentActivity() {
     fun snapshot(through:LocalDate,days:Int)=RecordHistory.facts(store.logs(),store.plan,habits.habits(),habits.entries(),store.events(),through,days)
     val facts=remember(today,revision,historyFrom,historyThrough) { snapshot(LocalDate.parse(historyThrough),java.time.temporal.ChronoUnit.DAYS.between(LocalDate.parse(historyFrom),LocalDate.parse(historyThrough)).toInt()+1) }
     var ready by remember { mutableStateOf(CloudCoach.configured(a)) }
-    LaunchedEffect(a.settingsRevision) { ready=CloudCoach.configured(a);keyboardVoice=voicePrefs.getBoolean("keyboard",true) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
     var job by remember { mutableStateOf<Job?>(null) }
+    val lifecycle=LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val listener=LifecycleEventObserver { _,event ->
+            if(event==Lifecycle.Event.ON_PAUSE) job?.cancel()
+            if(event==Lifecycle.Event.ON_RESUME) { ready=CloudCoach.configured(a);voiceEnabled=CoachChat.voiceEnabled(a) }
+        }
+        lifecycle.addObserver(listener)
+        onDispose { lifecycle.removeObserver(listener);job?.cancel() }
+    }
     var retry by remember { mutableStateOf<(suspend ()->Unit)?>(null) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showHistory by rememberSaveable { mutableStateOf(false) }
@@ -88,9 +89,18 @@ class CoachActivity:ComponentActivity() {
     var input by rememberSaveable { mutableStateOf("") }
     var recording by rememberSaveable { mutableStateOf(false) }
     var referenceDay by rememberSaveable { mutableStateOf(today.toString()) }
-    var draftText by remember { mutableStateOf("") }
-    var drafts by remember { mutableStateOf<List<CoachDraft>>(emptyList()) }
-    var originals by remember { mutableStateOf<Map<String,DayLog>>(emptyMap()) }
+    var draftText by rememberSaveable { mutableStateOf("") }
+    var drafts by rememberSaveable(stateSaver=listSaver<List<CoachDraft>,String>(
+        save={ it.map { d->JSONObject().put("day",d.day).put("bed",d.bed).put("rise",d.rise).put("energy",d.energy).put("reason",d.reason).put("note",d.note).toString() } },
+        restore={ it.map { raw->
+            val d=JSONObject(raw)
+            fun field(key:String)=if(d.has(key)) d.getString(key) else null
+            CoachDraft(d.getString("day"),field("bed"),field("rise"),field("energy"),field("reason"),field("note"))
+        } }
+    )) { mutableStateOf(emptyList()) }
+    var originals by rememberSaveable(stateSaver=listSaver<Map<String,DayLog>,String>(
+        save={it.values.map { log->Store.encodeLog(log).toString() }},restore={it.map { raw->Store.decodeLog(JSONObject(raw)) }.associateBy { log->log.day }}
+    )) { mutableStateOf(emptyMap()) }
     var messages by remember { mutableStateOf(CoachChat.load(a)) }
     val reports=remember { ProjectPreferences.get(a,"coach_reports") }
     fun append(message:CoachMessage) {
@@ -145,20 +155,13 @@ class CoachActivity:ComponentActivity() {
         }
     }
     fun useInputMethodVoice() {
-        keyboardVoice=true;voicePrefs.edit().putBoolean("keyboard",true).apply()
-        voiceFallback=false;status="请点键盘上的麦克风开始说话；识别后可修改，再点发送。"
+        if(!voiceEnabled) return
+        status="请点键盘上的麦克风开始说话；识别后可修改，再点发送。"
         keyboardRequest++
     }
     LaunchedEffect(keyboardRequest) {
         if(keyboardRequest>0) { inputFocus.requestFocus();withFrameNanos { };keyboard?.show() }
     }
-    val voice=rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val text=if(result.resultCode==Activity.RESULT_OK) CoachChat.voiceText(input,result.data,if(recording) 300 else 2000) else null
-        if(text!=null) input=text
-        status=CoachChat.voiceStatus(result.resultCode,text!=null)
-        voiceFallback=text==null
-    }
-    a.cancelGeneration={job?.takeIf { it.isActive }?.cancel()}
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) { runCatching { CloudCoach.clearLegacyModel(a) } }
             .onFailure { status=it.message ?: "旧模型清理失败，下次打开时会重试" }
@@ -166,9 +169,8 @@ class CoachActivity:ComponentActivity() {
     LaunchedEffect(messages.size,messages.lastOrNull()?.id,busy,status,drafts) {
         listState.animateScrollToItem((listState.layoutInfo.totalItemsCount-1).coerceAtLeast(0))
     }
-    Column(Modifier.fillMaxSize().background(Paper).safeDrawingPadding().imePadding()) {
+    Column(modifier.fillMaxSize().background(Paper)) {
         if(!(shortScreen && keyboardVisible)) Row(Modifier.fillMaxWidth().padding(horizontal=10.dp,vertical=6.dp),verticalAlignment=Alignment.CenterVertically) {
-            IconButton(onClick={a.finish()}) { Icon(Icons.AutoMirrored.Outlined.ArrowBack,"返回变化",tint=Ink) }
             Column(Modifier.weight(1f)) {
                 Text("记录助手",fontSize=19.sp,fontWeight=FontWeight.SemiBold,color=Ink)
                 Text(if(ready) "DeepSeek · 回顾作息、习惯和操作" else "连接后，开始你的第一段对话",fontSize=11.sp,color=Muted)
@@ -219,7 +221,6 @@ class CoachActivity:ComponentActivity() {
             if(status.isNotBlank()) item {
                 Column {
                     Text(status,fontSize=13.sp,lineHeight=21.sp,color=Muted)
-                    if(voiceFallback && !busy && drafts.isEmpty()) TextButton(onClick={useInputMethodVoice()}) { Text("改用输入法语音") }
                     if(retry!=null && !busy) TextButton(onClick={retry?.let { startGeneration(it) }}) { Text("重试") }
                 }
             }
@@ -241,31 +242,24 @@ class CoachActivity:ComponentActivity() {
                         placeholder={Text(if(recording) "如：今天7:20起床，精神一般" else "说说今天，或问一个问题…",fontSize=14.sp)},
                         shape=RoundedCornerShape(22.dp),singleLine=shortScreen && keyboardVisible,maxLines=if(compact) 2 else 4,enabled=!busy && drafts.isEmpty(),
                         colors=OutlinedTextFieldDefaults.colors(unfocusedBorderColor=Sage,focusedBorderColor=Moss),
-                        trailingIcon={IconButton(onClick={
-                            if(keyboardVoice) useInputMethodVoice() else {
-                                keyboard?.hide();voiceFallback=false
-                                try { voice.launch(CoachChat.voiceIntent()) }
-                                catch(e:ActivityNotFoundException) { status="手机没有可用的系统语音识别服务，请改用输入法语音。";voiceFallback=true }
-                                catch(e:SecurityException) { status="系统语音服务拒绝了请求；可检查该服务的授权，或改用输入法语音。";voiceFallback=true }
-                            }
-                        },enabled=!busy && drafts.isEmpty()) { Icon(Icons.Outlined.Mic,"语音输入",tint=Moss) }})
+                        trailingIcon=if(voiceEnabled) { { IconButton(onClick={useInputMethodVoice()},enabled=!busy && drafts.isEmpty()) { Icon(Icons.Outlined.Mic,"语音输入",tint=Moss) } } } else null)
                     FilledIconButton(onClick={send()},enabled=input.isNotBlank() && !busy && drafts.isEmpty(),modifier=Modifier.padding(bottom=4.dp).size(48.dp),shape=RoundedCornerShape(16.dp)) {
                         Icon(Icons.AutoMirrored.Outlined.Send,if(recording) "发送补记" else "发送消息")
                     }
                 }
-                if(!compact) Text(if(keyboardVoice) "语音入口打开键盘，再点键盘麦克风 · 手动发送" else "系统语音转文字后发送 · 建议仅供作息参考",fontSize=10.sp,color=Muted,modifier=Modifier.align(Alignment.CenterHorizontally))
+                if(!compact && voiceEnabled) Text("语音入口打开键盘，再点键盘麦克风 · 手动发送",fontSize=10.sp,color=Muted,modifier=Modifier.align(Alignment.CenterHorizontally))
             }
         }
     }
     if(showSettings) AlertDialog(onDismissRequest={showSettings=false},title={Text("助手设置")},text={
         Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment=Alignment.CenterVertically) {
-                Text("优先使用输入法语音",Modifier.weight(1f))
-                Switch(keyboardVoice,{keyboardVoice=it;voicePrefs.edit().putBoolean("keyboard",it).apply()},modifier=Modifier.semantics { contentDescription="优先使用输入法语音" })
+                Text("启用语音输入",Modifier.weight(1f))
+                Switch(voiceEnabled,{voiceEnabled=it;voicePrefs.edit().putBoolean("enabled",it).apply();status=""},modifier=Modifier.semantics { contentDescription="启用语音输入" })
             }
-            SmallNote("默认打开键盘，再点输入法麦克风；识别文字可修改，发送后才提交。关闭后使用手机系统语音弹窗。")
+            SmallNote("开启后使用输入法麦克风；关闭后隐藏语音入口，仍可打字。文字核对后手动发送。")
             SettingLink("API 与自动复盘设置","统一管理 DeepSeek 密钥、每周和21天总结") {
-                showSettings=false;a.startActivity(Intent(a,MainActivity::class.java).setAction("ai_settings").addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
+                showSettings=false;onSettings()
             }
             SettingLink("复盘看板","按习惯查看周期总结") { showSettings=false;a.startActivity(Intent(a,ReviewActivity::class.java)) }
         }

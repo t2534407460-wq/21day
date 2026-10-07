@@ -1,9 +1,6 @@
 package com.twentyone.rhythm
 
 import android.content.Context
-import android.app.Activity
-import android.content.Intent
-import android.speech.RecognizerIntent
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
@@ -12,6 +9,7 @@ data class CoachMessage(val role:String,val text:String,val id:String=UUID.rando
     val at:Long=System.currentTimeMillis(),val days:Int=0,val facts:String="",val context:Boolean=true)
 
 object CoachChat {
+    fun voiceEnabled(c:Context):Boolean=ProjectPreferences.get(c,"coach_voice").let { it.getBoolean("enabled",it.getBoolean("keyboard",true)) }
     fun load(c:Context):List<CoachMessage> = runCatching {
         val array=JSONArray(ProjectPreferences.get(c,"coach_chat").getString("messages","[]"))
         (0 until array.length()).map { i ->
@@ -45,24 +43,5 @@ object CoachChat {
         require(recent.isNotEmpty() && recent.last().role=="user") { "请先输入想聊的内容" }
         recent.forEach { messages.put(JSONObject().put("role",it.role).put("content",it.text)) }
         return messages
-    }
-    fun voiceIntent()=Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-        .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-        .putExtra(RecognizerIntent.EXTRA_LANGUAGE,"zh-CN")
-        .putExtra(RecognizerIntent.EXTRA_PROMPT,"说说你的记录，识别后可修改再发送")
-        .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS,1)
-    fun voiceText(existing:String,result:Intent?,limit:Int):String? {
-        val spoken=result?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-        return listOf(existing.trim(),spoken).filter { it.isNotEmpty() }.joinToString(" ").take(limit)
-    }
-    fun voiceStatus(resultCode:Int,hasText:Boolean):String=when(resultCode) {
-        Activity.RESULT_OK->if(hasText) "语音已转为文字，核对后点击发送。" else "系统语音没有返回文字，可以改用输入法语音。"
-        Activity.RESULT_CANCELED->"系统语音已结束，原来的文字保留。若刚才出现报错，可改用输入法语音。"
-        RecognizerIntent.RESULT_NO_MATCH->"系统语音未识别到内容，可以重说，或改用输入法语音。"
-        RecognizerIntent.RESULT_CLIENT_ERROR->"系统语音服务无法处理请求（2），可以改用输入法语音。"
-        RecognizerIntent.RESULT_SERVER_ERROR->"系统语音服务端出错（3），可以稍后重试或改用输入法语音。"
-        RecognizerIntent.RESULT_NETWORK_ERROR->"系统语音网络连接失败（4），可以检查网络或改用输入法语音。"
-        RecognizerIntent.RESULT_AUDIO_ERROR->"系统语音无法获取声音（5），请检查语音服务的麦克风权限或改用输入法语音。"
-        else->"系统语音未完成（$resultCode），原来的文字保留，可以改用输入法语音。"
     }
 }

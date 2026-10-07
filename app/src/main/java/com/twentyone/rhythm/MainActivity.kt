@@ -14,8 +14,10 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -31,18 +33,19 @@ import java.time.format.DateTimeFormatter
 class MainActivity : ComponentActivity() {
     var permissionRevision by mutableIntStateOf(0)
     var habitRequest by mutableIntStateOf(0)
+    var coachRequest by mutableIntStateOf(0)
     var settingsRequest by mutableIntStateOf(0)
     var settingsTarget=""
     var bedtimeRequest by mutableIntStateOf(0)
     var nfcListener: ((String)->Unit)?=null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); enableEdgeToEdge(); Alarms.schedule(this)
-        if(intent.action=="habits") habitRequest++
+        if(intent.action=="coach") coachRequest++;if(intent.action=="habits") habitRequest++
         if(intent.action=="bedtime_record") bedtimeRequest++
         if(intent.action=="ai_settings") { settingsTarget="AI 助手";settingsRequest++ }
         setContent { RhythmTheme { AppRoot(this) } }
     }
-    override fun onNewIntent(intent:android.content.Intent) { super.onNewIntent(intent);setIntent(intent);if(intent.action=="habits") habitRequest++;if(intent.action=="bedtime_record") bedtimeRequest++;if(intent.action=="ai_settings") { settingsTarget="AI 助手";settingsRequest++ } }
+    override fun onNewIntent(intent:android.content.Intent) { super.onNewIntent(intent);setIntent(intent);if(intent.action=="coach") coachRequest++;if(intent.action=="habits") habitRequest++;if(intent.action=="bedtime_record") bedtimeRequest++;if(intent.action=="ai_settings") { settingsTarget="AI 助手";settingsRequest++ } }
     override fun onResume() {
         super.onResume();permissionRevision++;Alarms.schedule(this)
         NfcAdapter.getDefaultAdapter(this)?.enableReaderMode(this,{ tag -> val id=tag.id.joinToString(""){"%02X".format(it)}; runOnUiThread { nfcListener?.invoke(id) } },NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_NFC_B or NfcAdapter.FLAG_READER_NFC_F or NfcAdapter.FLAG_READER_NFC_V or NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK,null)
@@ -65,7 +68,7 @@ class MainActivity : ComponentActivity() {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var settingsCategory by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(activity.habitRequest) { if(activity.habitRequest>0) tab=2 }
-    LaunchedEffect(activity.settingsRequest) { if(activity.settingsRequest>0) { settingsCategory=activity.settingsTarget;tab=4 } }
+    LaunchedEffect(activity.settingsRequest) { if(activity.settingsRequest>0) { settingsCategory=activity.settingsTarget;tab=5 } }
     var editor by remember { mutableStateOf(false) }; var renew by remember { mutableStateOf(false) }
     var logDay by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(activity.bedtimeRequest) { if(activity.bedtimeRequest>0) { tab=0;logDay=p?.let { BedtimeSchedule.recordDay(it,r,LocalDateTime.now())?.toString() } } }
@@ -74,17 +77,23 @@ class MainActivity : ComponentActivity() {
     BackHandler(enabled=!editor && logDay==null && message==null && !showPrivacy) {
         if(s.keepTaskOnBack) activity.moveTaskToBack(true) else activity.finish()
     }
+    val pageState=rememberSaveableStateHolder()
+    LaunchedEffect(activity.coachRequest) { if(activity.coachRequest>0) tab=4 }
     val scrollState=rememberScrollState()
     LaunchedEffect(tab){scrollState.scrollTo(0)}
-    Scaffold(containerColor=Paper,bottomBar={
-        NavigationBar(containerColor=Paper,tonalElevation=0.dp) {
-            listOf("今天","21 天","习惯","变化","设置").forEachIndexed { i,label ->
-                val icon=listOf(Icons.Outlined.WbSunny,Icons.Outlined.CalendarMonth,Icons.Outlined.CheckCircle,Icons.Outlined.Insights,Icons.Outlined.Tune)[i]
-                NavigationBarItem(selected=tab==i,onClick={tab=i},icon={Icon(icon,label)},label={Text(label)},colors=NavigationBarItemDefaults.colors(indicatorColor=Sage,selectedIconColor=Ink,selectedTextColor=Ink))
+    Scaffold(modifier=Modifier.imePadding(),containerColor=Paper,bottomBar={
+        if(WindowInsets.ime.getBottom(LocalDensity.current)==0) NavigationBar(containerColor=Paper,tonalElevation=0.dp) {
+            listOf("今天","21 天","习惯","变化","记录助手","设置").forEachIndexed { i,label ->
+                val icon=listOf(Icons.Outlined.WbSunny,Icons.Outlined.CalendarMonth,Icons.Outlined.CheckCircle,Icons.Outlined.Insights,Icons.Outlined.ChatBubbleOutline,Icons.Outlined.Tune)[i]
+                NavigationBarItem(selected=tab==i,onClick={tab=i},icon={Icon(icon,label)},label={Text(label,fontSize=11.sp,maxLines=1)},colors=NavigationBarItemDefaults.colors(indicatorColor=Sage,selectedIconColor=Ink,selectedTextColor=Ink))
             }
         }
     }) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize().verticalScroll(scrollState).padding(horizontal=22.dp).padding(top=20.dp,bottom=28.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
+        if(tab==4) pageState.SaveableStateProvider("coach") {
+            CoachScreen(activity,Modifier.padding(padding).consumeWindowInsets(padding),onSettings={settingsCategory="AI 助手";tab=5})
+        } else if(tab==3) pageState.SaveableStateProvider("reviews") {
+            ReviewScreen(activity,Modifier.padding(padding).consumeWindowInsets(padding))
+        } else Column(Modifier.padding(padding).fillMaxSize().verticalScroll(scrollState).padding(horizontal=22.dp).padding(top=20.dp,bottom=28.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
             when(tab) {
                 0,1->if(p==null) {
                     Eyebrow("廿一 / 按自己的节奏来");Heading("从一个小习惯开始。")
@@ -93,12 +102,10 @@ class MainActivity : ComponentActivity() {
                     Sheet(color=Sage) { Text("想让作息更规律？",fontWeight=FontWeight.SemiBold);SmallNote("设定睡前时间，完成夜间打卡与醒后验证。");Primary("设置我的 21 天") { editor=true } }
                     OutlinedButton(onClick={tab=2},modifier=Modifier.fillMaxWidth()) { Text("先去创建阅读、运动等习惯") }
                     SmallNote("习惯模块可独立使用。21 天是启动与复盘周期，并非养成保证。")
-                } else if(tab==0) Today(activity,s,p,r,now,revision,onHabits={tab=2},onRecord={logDay=it},onSettings={tab=4},onPlan={tab=1})
+                } else if(tab==0) Today(activity,s,p,r,now,revision,onHabits={tab=2},onRecord={logDay=it},onSettings={tab=5},onPlan={tab=1})
                     else PlanScreen(s,p,r,now,onDay={logDay=it},onEdit={editor=true},onRenew={renew=true;editor=true})
-                2->HabitScreen(activity,now.toLocalDate(),revision,scrollState,onSettings={settingsCategory="权限与后台";tab=4})
-                3->if(p!=null) Trends(s,p,onCoach={activity.startActivity(android.content.Intent(activity,CoachActivity::class.java))})
-                    else { Heading("作息变化");SmallNote("开始作息计划后，在这里回顾早晚记录。其他习惯的趋势在各自详情中查看。");Primary("查看我的习惯") { tab=2 } }
-                4->SettingsScreen(activity,s,r,activity.permissionRevision,settingsCategory,{settingsCategory=it},scrollState,onHabits={tab=2},onEdit={editor=true},onMessage={message=it},onPrivacy={showPrivacy=true})
+                2->HabitScreen(activity,now.toLocalDate(),revision,scrollState,onSettings={settingsCategory="权限与后台";tab=5})
+                5->SettingsScreen(activity,s,r,activity.permissionRevision,settingsCategory,{settingsCategory=it},scrollState,onHabits={tab=2},onEdit={editor=true},onMessage={message=it},onPrivacy={showPrivacy=true})
             }
         }
     }
@@ -121,7 +128,7 @@ class MainActivity : ComponentActivity() {
     }) }
     message?.let { text -> AlertDialog(onDismissRequest={message=null},title={Text("廿一")},text={Text(text)},confirmButton={TextButton(onClick={message=null}){Text("知道了")}}) }
     if(showPrivacy) PrivacyDialog { showPrivacy=false }
-    AutomaticUpdatePrompt(activity) { settingsCategory="数据与更新";tab=4 }
+    AutomaticUpdatePrompt(activity) { settingsCategory="数据与更新";tab=5 }
 }
 
 @Composable fun DawnArt(modifier:Modifier=Modifier) {
@@ -191,56 +198,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 @Composable fun SmallLight(text:String) { Text(text,color=Color.White.copy(alpha=.65f),fontSize=12.sp) }
-
-@Composable fun Trends(s:Store,p:Plan,onCoach:()->Unit) {
-    val logs=s.logs().filter { runCatching { p.contains(LocalDate.parse(it.day)) }.getOrDefault(false) }
-    val done=logs.count { BedtimeSchedule.checked(it) }; val verified=(1L..21L).count { s.log(p.start.plusDays(it).toString()).verifiedAt>0 }
-    Eyebrow("SMALL CHANGES, REAL PROGRESS"); Heading("看见自己的变化。")
-    Sheet(color=Sage) {
-        Text("DeepSeek 记录助手",fontWeight=FontWeight.SemiBold)
-        SmallNote("回顾作息、习惯打卡、计时与临时使用；历史记录可选日期范围，也能补记作息自述。")
-        Primary("打开记录助手",click=onCoach)
-    }
-    Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-        Sheet(Modifier.weight(1f),Sage) { Eyebrow("睡前已打卡"); LargeNumber("$done"); SmallNote("天 / 本轮 21 天") }
-        Sheet(Modifier.weight(1f),Lime.copy(alpha=.55f)) { Eyebrow("起床已验证"); LargeNumber("$verified"); SmallNote("天 / 按验证记录") }
-    }
-    Sheet {
-        Text("最近的作息",fontWeight=FontWeight.SemiBold)
-        val recent=(0L..20L).map { p.start.plusDays(it) }.filter { date ->
-            val evening=s.log(date.toString());val morning=s.log(date.plusDays(1).toString())
-            evening.bedtimeCheckedAt>0 || evening.bed.isNotBlank() || morning.verifiedAt>0 || morning.rise.isNotBlank()
-        }.takeLast(7)
-        if(recent.isEmpty()) {
-            DawnArt(Modifier.fillMaxWidth().height(100.dp));Text("变化，从第一次记录开始。",color=Muted)
-            SmallNote("完成睡前打卡和醒后验证后，这里会把一晚与次晨连起来。")
-        } else recent.forEach { date ->
-            val evening=s.log(date.toString());val morning=s.log(date.plusDays(1).toString())
-            Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                Text("${date.format(DateTimeFormatter.ofPattern("MM.dd"))} 晚 → ${date.plusDays(1).format(DateTimeFormatter.ofPattern("MM.dd"))} 早",fontSize=14.sp)
-                Text(s.nightStatus(date),fontSize=14.sp,color=Moss)
-                SmallNote("睡前："+(if(BedtimeSchedule.checked(evening)) stamp(evening.bedtimeCheckedAt) else if(evening.bed.isNotBlank()) "自述上床 ${evening.bed}" else "未打卡")+
-                    "\n醒后："+(if(morning.verifiedAt>0) "${stamp(morning.verifiedAt)} 已验证" else if(morning.rise.isNotBlank()) "自述起床 ${morning.rise} · 未验证" else "未验证"))
-            }
-        }
-    }
-    Sheet {
-        Text("每周复盘",fontWeight=FontWeight.SemiBold)
-        val recorded=logs.filter { BedtimeSchedule.checked(it) || it.status!="未记录" }
-        Text(if(recorded.isEmpty()) "先积累几天记录，再一起回顾。" else "本轮已记录 ${recorded.size} 天，其中 $done 晚完成了睡前打卡。",fontSize=15.sp)
-        val reason=logs.map { it.bedReason.ifEmpty { it.reason } }.filter { it.isNotBlank() && it!="无" }.groupingBy { it }.eachCount().maxByOrNull { it.value }
-        if(reason!=null) Text("记录最多的阻碍：${reason.key}（${reason.value} 次）。",fontSize=14.sp)
-        SmallNote("回顾三个问题：时间是否更稳定？执行是否更轻松？下一周只调整哪一件事？")
-        val badge=when { done>=21->"完整一轮";done>=14->"持续生长";done>=7->"第一周的积累";done>=1->"已经开始";else->null }
-        if(badge!=null) AssistChip(onClick={},label={Text("✦  $badge")})
-    }
-    Sheet {
-        Text("例外也值得被看见",fontWeight=FontWeight.SemiBold)
-        val events=s.events().takeLast(8).reversed()
-        if(events.isEmpty()) SmallNote("临时使用和规则调整会记录在这里。偶尔中断，之前的进度仍然保留。")
-        events.forEach { e-> Column { Text(e.kind,fontSize=14.sp); SmallNote(Instant.ofEpochMilli(e.time).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("MM-dd HH:mm"))+" · "+e.detail) } }
-    }
-}
 
 @Composable fun PlanDialog(p:Plan?,r:Rules,renew:Boolean,onDismiss:()->Unit,onSave:(Plan,Rules)->Unit) {
     var start by remember { mutableStateOf(if(p==null || renew) LocalDate.now().toString() else p.start.toString()) }

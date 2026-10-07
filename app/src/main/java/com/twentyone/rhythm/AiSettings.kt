@@ -21,7 +21,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
     val store=remember { ReviewStore(c) };val voice=remember { ProjectPreferences.get(c,"coach_voice") }
     var weekly by remember { mutableStateOf(store.settings.getBoolean("weekly",true)) }
     var cycle by remember { mutableStateOf(store.settings.getBoolean("cycle",true)) }
-    var keyboard by remember { mutableStateOf(voice.getBoolean("keyboard",true)) }
+    var enabled by remember { mutableStateOf(CoachChat.voiceEnabled(c)) }
     var key by remember { mutableStateOf("") };var ready by remember { mutableStateOf(CloudCoach.configured(c)) };var busy by remember { mutableStateOf(false) }
     val scope=rememberCoroutineScope()
     val lifecycle=LocalLifecycleOwner.current.lifecycle
@@ -62,7 +62,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
     }
     Sheet {
         Text("聊天输入",fontWeight=FontWeight.SemiBold)
-        Row(verticalAlignment=Alignment.CenterVertically) { Text("优先使用输入法语音",Modifier.weight(1f));Switch(keyboard,{keyboard=it;voice.edit().putBoolean("keyboard",it).apply()}) }
-        SmallNote("麦克风入口打开键盘，再点输入法麦克风。识别文字可修改，发送后才提交给 DeepSeek。")
+        Row(verticalAlignment=Alignment.CenterVertically) { Text("启用语音输入",Modifier.weight(1f));Switch(enabled,{enabled=it;voice.edit().putBoolean("enabled",it).apply()}) }
+        SmallNote("开启后使用输入法麦克风；关闭后隐藏助手的语音入口，仍可打字。识别文字可修改，发送后才提交。")
     }
 }
