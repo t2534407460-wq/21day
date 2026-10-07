@@ -29,7 +29,8 @@ class ReviewActivity:ComponentActivity() {
 }
 @Composable fun ReviewScreen(a:Context,modifier:Modifier=Modifier,initialTab:String="week",initialSubject:String="",onBack:(()->Unit)?=null,showNavigation:Boolean=true) {
     val store=remember { ReviewStore(a) };val scope=rememberCoroutineScope();val now=clock()
-    var revision by remember { mutableIntStateOf(0) };var tab by rememberSaveable { mutableStateOf(initialTab) };var subject by rememberSaveable { mutableStateOf(initialSubject) }
+    var revision by remember { mutableIntStateOf(0) };var standaloneTab by rememberSaveable { mutableStateOf(initialTab) };var subject by rememberSaveable { mutableStateOf(initialSubject) }
+    val tab=if(showNavigation) standaloneTab else initialTab
     var period by rememberSaveable { mutableStateOf("") }
     var chooseSubject by remember { mutableStateOf(false) };var choosePeriod by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) };var busy by remember { mutableStateOf<String?>(null) }
@@ -47,7 +48,7 @@ class ReviewActivity:ComponentActivity() {
         if(showNavigation) {
             Row(verticalAlignment=Alignment.CenterVertically) { if(onBack!=null) IconButton(onClick=onBack){Icon(Icons.AutoMirrored.Outlined.ArrowBack,"返回")};Heading("变化") }
             TabRow(selectedTabIndex=if(tab=="week") 0 else 1,containerColor=Paper,contentColor=Moss) {
-                listOf("week" to "周总结","cycle" to "21天总结").forEach { (id,label) -> Tab(selected=tab==id,onClick={tab=id;period=""},text={Text(label)}) }
+                listOf("week" to "周总结","cycle" to "21天总结").forEach { (id,label) -> Tab(selected=tab==id,onClick={standaloneTab=id;period=""},text={Text(label)}) }
             }
         }
         if(subjects.isNotEmpty()) Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {

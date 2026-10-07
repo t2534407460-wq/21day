@@ -2,7 +2,14 @@ package com.twentyone.rhythm
 
 import android.content.Intent
 import android.os.Build
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.runner.lifecycle.*
 import androidx.test.uiautomator.*
 import org.junit.*
 import org.junit.Assert.*
@@ -28,6 +35,37 @@ class ReviewNavigationTest {
     private fun launch() {
         c.startActivity(Intent(c,MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
         tap("21 天")
+    }
+    @Test fun reusedEmbeddedReviewFollowsParentSelectionInsteadOfRememberedWeek() {
+        val start=LocalDate.now().minusDays(24)
+        val h=Habit(name="阅读",start=start,rules=listOf(HabitRule(start)))
+        HabitStore(c).save(h,start)
+        val store=ReviewStore(c);store.settings.edit().putString("since",start.toString()).commit()
+        val specs=store.specs(c)
+        store.save(specs.last { it.kind=="week" }.id,ReviewReport("done",answer="周报告原文"))
+        store.save(specs.first { it.kind=="cycle" }.id,ReviewReport("done",answer="周期报告原文"))
+        launch()
+        // Reuse the embedded content while its parent changes selection. A saved local
+        // week must never override the currently selected cycle in the parent.
+        var selected by mutableStateOf("week")
+        instrumentation.runOnMainSync {
+            val activity=ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED).first() as ComponentActivity
+            activity.setContent { RhythmTheme { Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+                Row {
+                    TextButton(onClick={selected="week"}) { Text("切换周总结") }
+                    TextButton(onClick={selected="cycle"}) { Text("切换21天总结") }
+                }
+                Text("当前选择：$selected")
+                ReviewScreen(activity,initialTab=selected,showNavigation=false)
+            } } }
+        }
+        assertTrue(device.wait(Until.hasObject(By.text("周报告原文")),5000))
+        tap("切换21天总结")
+        assertTrue(device.wait(Until.hasObject(By.text("当前选择：cycle")),3000))
+        device.takeScreenshot(java.io.File(c.getExternalFilesDir(null),"review-parent-cycle.png"))
+        assertTrue("父页签已是cycle，正文必须跟随",device.wait(Until.hasObject(By.text("周期报告原文")),3000))
+        assertFalse(device.hasObject(By.text("周报告原文")))
+        tap("切换周总结");assertTrue(device.wait(Until.hasObject(By.text("周报告原文")),3000))
     }
     @Test fun unfinishedCyclesSwitchRepeatedlyWithoutLosingContentOrNavigation() {
         val today=LocalDate.now();val start=today.minusDays(3)
