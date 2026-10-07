@@ -10,8 +10,8 @@ android {
         applicationId = "com.twentyone.rhythm"
         minSdk = 28
         targetSdk = 35
-        versionCode = 19
-        versionName = "0.11.2"
+        versionCode = 20
+        versionName = "0.12.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true; buildConfig = true }

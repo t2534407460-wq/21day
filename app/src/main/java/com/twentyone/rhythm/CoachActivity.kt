@@ -54,6 +54,7 @@ class CoachActivity:ComponentActivity() {
 
 @Composable private fun CoachScreen(a:CoachActivity) {
     val store=remember { Store(a) };val scope=rememberCoroutineScope()
+    val habits=remember { HabitStore(a) }
     val keyboard=LocalSoftwareKeyboardController.current
     val inputFocus=remember { FocusRequester() }
     val voicePrefs=remember { ProjectPreferences.get(a,"coach_voice") }
@@ -71,7 +72,10 @@ class CoachActivity:ComponentActivity() {
         onDispose { store.prefs.unregisterOnSharedPreferenceChangeListener(listener);a.cancelGeneration=null }
     }
     val today=clock().toLocalDate()
-    val facts=remember(today,revision) { CoachAnalysis.facts(store.logs(),today,7) }
+    var historyFrom by rememberSaveable { mutableStateOf(today.minusDays(6).toString()) }
+    var historyThrough by rememberSaveable { mutableStateOf(today.toString()) }
+    fun snapshot(through:LocalDate,days:Int)=RecordHistory.facts(store.logs(),store.plan,habits.habits(),habits.entries(),store.events(),through,days)
+    val facts=remember(today,revision,historyFrom,historyThrough) { snapshot(LocalDate.parse(historyThrough),java.time.temporal.ChronoUnit.DAYS.between(LocalDate.parse(historyFrom),LocalDate.parse(historyThrough)).toInt()+1) }
     var ready by remember { mutableStateOf(CloudCoach.configured(a)) }
     LaunchedEffect(a.settingsRevision) { ready=CloudCoach.configured(a);keyboardVoice=voicePrefs.getBoolean("keyboard",true) }
     var busy by remember { mutableStateOf(false) }
@@ -80,6 +84,7 @@ class CoachActivity:ComponentActivity() {
     var retry by remember { mutableStateOf<(suspend ()->Unit)?>(null) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showHistory by rememberSaveable { mutableStateOf(false) }
+    var showReports by rememberSaveable { mutableStateOf(false) }
     var input by rememberSaveable { mutableStateOf("") }
     var recording by rememberSaveable { mutableStateOf(false) }
     var referenceDay by rememberSaveable { mutableStateOf(today.toString()) }
@@ -105,8 +110,8 @@ class CoachActivity:ComponentActivity() {
     }
     fun summary(days:Int) {
         if(!ready) { showSettings=true;return }
-        val snapshot=CoachAnalysis.facts(store.logs(),today,days)
-        append(CoachMessage("user",if(days==1) "帮我回顾一下今天的作息。" else "看看我最近7天的作息，有什么建议？"))
+        val snapshot=snapshot(today,days)
+        append(CoachMessage("user",if(days==1) "帮我回顾一下今天的作息、习惯打卡和临时使用记录。" else "看看我最近7天的作息、习惯打卡和临时使用记录，有什么建议？"))
         keyboard?.hide()
         startGeneration {
             val answer=CoachInference.generate(a,CoachAnalysis.summaryPrompt(snapshot))
@@ -165,10 +170,10 @@ class CoachActivity:ComponentActivity() {
         if(!(shortScreen && keyboardVisible)) Row(Modifier.fillMaxWidth().padding(horizontal=10.dp,vertical=6.dp),verticalAlignment=Alignment.CenterVertically) {
             IconButton(onClick={a.finish()}) { Icon(Icons.AutoMirrored.Outlined.ArrowBack,"返回变化",tint=Ink) }
             Column(Modifier.weight(1f)) {
-                Text("作息助手",fontSize=19.sp,fontWeight=FontWeight.SemiBold,color=Ink)
-                Text(if(ready) "DeepSeek · 一起把作息理顺" else "连接后，开始你的第一段对话",fontSize=11.sp,color=Muted)
+                Text("记录助手",fontSize=19.sp,fontWeight=FontWeight.SemiBold,color=Ink)
+                Text(if(ready) "DeepSeek · 回顾作息、习惯和操作" else "连接后，开始你的第一段对话",fontSize=11.sp,color=Muted)
             }
-            IconButton(onClick={showHistory=true}) { Icon(Icons.Outlined.History,"历史总结",tint=Muted) }
+            IconButton(onClick={showHistory=true}) { Icon(Icons.Outlined.History,"历史记录",tint=Muted) }
             IconButton(onClick={showSettings=true},enabled=!busy) { Icon(Icons.Outlined.Tune,"助手设置",tint=Muted) }
         }
         HorizontalDivider(color=Sage)
@@ -176,14 +181,15 @@ class CoachActivity:ComponentActivity() {
             item {
                 Column(Modifier.padding(top=14.dp,bottom=8.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
                     Icon(Icons.Outlined.NightsStay,null,tint=Moss,modifier=Modifier.size(32.dp))
-                    Text("从今晚的小事聊起。",fontSize=25.sp,fontWeight=FontWeight.SemiBold,color=Ink)
-                    Text("聊聊困意、今天的节奏，或一起想想怎么早点收尾。",fontSize=14.sp,lineHeight=23.sp,color=Muted)
-                    Text("近7天有 ${facts.recorded} 天记录 · 聊天会结合已有作息",fontSize=12.sp,color=Moss)
+                    Text("从记录里，看见每天。",fontSize=25.sp,fontWeight=FontWeight.SemiBold,color=Ink)
+                    Text("聊聊作息、阅读运动、戒烟打卡，或回顾临时使用申请。",fontSize=14.sp,lineHeight=23.sp,color=Muted)
+                    Text("${facts.from} 至 ${facts.through} · ${facts.recorded} 天有记录",fontSize=12.sp,color=Moss)
+                    TextButton(onClick={showHistory=true},contentPadding=PaddingValues(0.dp)) { Text("查看历史 / 更改聊天日期范围") }
                     if(!ready) TextButton(onClick={showSettings=true},contentPadding=PaddingValues(0.dp)) { Text("连接 DeepSeek") }
                 }
             }
             items(messages,key={it.id}) { message ->
-                CoachBubble(message,if(message.days>0) CoachAnalysis.facts(store.logs(),today,message.days).text!=message.facts else false)
+                CoachBubble(message,if(message.days>0) snapshot(today,message.days).text!=message.facts else false)
             }
             if(busy) item {
                 Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)) {
@@ -264,7 +270,11 @@ class CoachActivity:ComponentActivity() {
             SettingLink("复盘看板","按习惯查看周期总结") { showSettings=false;a.startActivity(Intent(a,ReviewActivity::class.java)) }
         }
     },confirmButton={TextButton(onClick={showSettings=false}){Text("完成")}})
-    if(showHistory) AlertDialog(onDismissRequest={showHistory=false},title={Text("历史总结")},text={
+    if(showHistory) RecordHistoryDialog(RecordHistory.records(store.logs(),habits.habits(),habits.entries(),store.events(),store.plan,today),store,today,historyFrom,historyThrough,
+        onDismiss={showHistory=false},onReports={showHistory=false;showReports=true},onRange={from,through->
+            historyFrom=from;historyThrough=through;showHistory=false;status="聊天现在使用 $from 至 $through 的记录。"
+        })
+    if(showReports) AlertDialog(onDismissRequest={showReports=false},title={Text("历史总结")},text={
         Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(14.dp)) {
             var found=false
             listOf(1,7).forEach { days ->
@@ -273,13 +283,13 @@ class CoachActivity:ComponentActivity() {
                     found=true
                     Text(if(days==1) "最近一次今日总结" else "最近一次7天复盘",fontWeight=FontWeight.Medium)
                     SmallNote(report.optString("source","旧版本地模型")+" · "+coachTime(report.optLong("at")))
-                    if(report.optString("facts")!=CoachAnalysis.facts(store.logs(),today,days).text) SmallNote("记录或日期已有变化，这是之前的总结。")
+                    if(report.optString("facts")!=snapshot(today,days).text) SmallNote("记录或日期已有变化，这是之前的总结。")
                     SelectionContainer { Text(report.optString("answer"),fontSize=14.sp,lineHeight=23.sp) }
                 }
             }
             if(!found) Text("还没有生成过总结。可以从聊天框上方开始今日或近7天复盘。")
         }
-    },confirmButton={TextButton(onClick={showHistory=false}){Text("关闭")}})
+    },confirmButton={TextButton(onClick={showReports=false}){Text("关闭")}})
 }
 
 private fun coachTime(at:Long)=Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("MM-dd HH:mm"))
@@ -287,7 +297,7 @@ private fun coachTime(at:Long)=Instant.ofEpochMilli(at).atZone(ZoneId.systemDefa
 @Composable private fun CoachBubble(message:CoachMessage,stale:Boolean) {
     val mine=message.role=="user"
     Column(Modifier.fillMaxWidth(),horizontalAlignment=if(mine) Alignment.End else Alignment.Start,verticalArrangement=Arrangement.spacedBy(6.dp)) {
-        if(!mine) Text("廿一 · 作息助手",fontSize=11.sp,color=Moss,modifier=Modifier.padding(start=4.dp))
+        if(!mine) Text("廿一 · 记录助手",fontSize=11.sp,color=Moss,modifier=Modifier.padding(start=4.dp))
         Surface(color=if(mine) Sage else Color.White,shape=RoundedCornerShape(20.dp,20.dp,if(mine) 6.dp else 20.dp,if(mine) 20.dp else 6.dp),
             modifier=Modifier.widthIn(max=340.dp)) {
             Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {

@@ -8,6 +8,12 @@ object BedtimeSchedule {
     val reasons=listOf("无","工作","手机","社交","没有困意","其他")
     fun answered(log:DayLog)=log.sleepiness in sleepiness && log.bedMood in moods && log.bedReason in reasons
     fun checked(log:DayLog)=log.bedtimeCheckedAt>0 && answered(log)
+    fun status(date:LocalDate,evening:DayLog,morning:DayLog):String {
+        val bed=checked(evening);val wake=morning.verifiedAt>0
+        return if(RestCalendar.isRest(date.plusDays(1))) {
+            if(bed) "已完成" else "未完成"
+        } else when { bed && wake->"已完成";bed || wake->"部分完成";else->"未完成" }
+    }
     // A plan day is an evening followed by its morning; 00:00–11:59 belongs to the next calendar day.
     fun bedtime(date:LocalDate,rules:Rules)=date.plusDays(if(rules.bedtime(date)<12*60) 1 else 0).atStartOfDay().plusMinutes(rules.bedtime(date).toLong())
     fun deadline(date:LocalDate,rules:Rules)=bedtime(date,rules)

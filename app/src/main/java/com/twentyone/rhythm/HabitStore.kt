@@ -23,15 +23,23 @@ class HabitStore(private val context:Context) {
             require(old.dates().filter { it<=today }.all { old.rule(it)==h.rule(it) }) { "调整只能从明天起生效" }
         }
         write(if(old==null) all+h else all.map { if(it.id==h.id) h else it },entries())
+        if(old!=h) Store(context).event(if(old==null) "新建习惯" else if(h.archived) "归档习惯" else "调整习惯","${h.name} · ${h.start} 至 ${h.end} · ${h.goal(h.rules.last().from)}")
     }
     fun record(entry:HabitEntry,today:LocalDate=LocalDate.now()):Unit=ProjectPreferences.atomic(context) {
+        recordEntry(entry,today,if(entries().any { it.habitId==entry.habitId && it.date==entry.date }) "更正习惯记录" else "手填习惯记录")
+    }
+    private fun recordEntry(entry:HabitEntry,today:LocalDate,kind:String) {
         val all=habits();val h=all.first { it.id==entry.habitId }
         require(!h.archived && h.scheduled(entry.date) && entry.date<=today) { "只能记录本轮已到日期的计划日" }
         require(validEntry(h,entry)) { "请填写有效数值，备注最多 300 字" }
         val list=entries().filterNot { it.habitId==entry.habitId && it.date==entry.date }+entry
         write(all,list)
+        Store(context).event(kind,"${h.name} · ${entry.date} · ${entry.value} ${h.unit}"+(if(entry.remainderSeconds>0) " ${entry.remainderSeconds}秒" else ""),entry.recordedAt)
     }
-    fun removeEntry(id:String,date:LocalDate)=ProjectPreferences.atomic(context) { write(habits(),entries().filterNot { it.habitId==id && it.date==date }) }
+    fun removeEntry(id:String,date:LocalDate)=ProjectPreferences.atomic(context) {
+        val all=habits();val list=entries();write(all,list.filterNot { it.habitId==id && it.date==date })
+        if(list.any { it.habitId==id && it.date==date }) Store(context).event("删除习惯记录","${all.first { it.id==id }.name} · $date")
+    }
     private fun timers()=JSONObject(prefs.getString("habit_timers","{}")!!)
     fun running(id:String)=timers().optJSONObject(id)?.optLong("at") ?: 0L
     fun otherDevice(id:String)=timers().optJSONObject(id)?.optString("device")?.let { it.isNotBlank() && it!=device } ?: false
@@ -40,6 +48,7 @@ class HabitStore(private val context:Context) {
         val active=timers();val timer=active.getJSONObject(id);require(otherDevice(id)){"该计时已由本机负责。"}
         timer.put("device",device)
         SyncJournal.command("timer_takeover"){prefs.edit().putString("habit_timers",active.toString()).apply()}
+        Store(context).event("接管计时",habits().first { it.id==id }.name)
     }
     private fun requireTimerOwner(id:String) {
         require(!otherDevice(id)){"计时由另一台设备负责，请先在打卡抽屉中接管。"}
@@ -50,8 +59,12 @@ class HabitStore(private val context:Context) {
         require(h.input==HabitInput.TIMER && !h.archived && h.scheduled(day)) { "今天不在这个习惯的执行日期内" }
         require(running(id)==0L) { "这次计时已经开始" }
         prefs.edit().putString("habit_timers",timers().put(id,JSONObject().put("at",now).put("day",day).put("id",java.util.UUID.randomUUID().toString()).put("device",device)).toString()).apply()
+        Store(context).event("开始计时","${h.name} · $day",now)
     }
-    fun cancelTimer(id:String)=ProjectPreferences.atomic(context) { requireTimerOwner(id);val active=timers();active.remove(id);prefs.edit().putString("habit_timers",active.toString()).apply() }
+    fun cancelTimer(id:String)=ProjectPreferences.atomic(context) {
+        requireTimerOwner(id);val active=timers();val started=active.has(id);active.remove(id);prefs.edit().putString("habit_timers",active.toString()).apply()
+        if(started) Store(context).event("取消计时",habits().first { it.id==id }.name)
+    }
     fun finishTimer(id:String,now:Long=System.currentTimeMillis()):Unit=ProjectPreferences.atomic(context) {
         requireTimerOwner(id)
         val start=running(id);require(start>0 && now>=start) { "计时状态或设备时间有变化，请取消本次计时后手动补记" }
@@ -63,16 +76,17 @@ class HabitStore(private val context:Context) {
         val entry=HabitEntry(id,day,(seconds/60).toInt(),old?.note ?: "",now,(old?.sessions ?: emptyList())+session,(seconds%60).toInt())
         val active=timers();active.remove(id)
         SyncJournal.command("timer_finish") { prefs.edit().putString("habits",encode(habits(),list.filterNot { it.habitId==id && it.date==day }+entry).toString()).putString("habit_timers",active.toString()).apply() }
+        Store(context).event("结束计时","${h.name} · $day · 本次 ${session.seconds}秒 · 当日 ${entry.value}分钟 ${entry.remainderSeconds}秒",now)
     }
     fun count(id:String,today:LocalDate=LocalDate.now()):Unit=ProjectPreferences.atomic(context) {
         val h=habits().first { it.id==id };require(h.input==HabitInput.COUNT) { "这个习惯不是次数打卡" }
         val old=entries().find { it.habitId==id && it.date==today }
-        SyncJournal.command("count") { record(HabitEntry(id,today,(old?.value ?: 0)+1,old?.note ?: ""),today) }
+        SyncJournal.command("count") { recordEntry(HabitEntry(id,today,(old?.value ?: 0)+1,old?.note ?: ""),today,"次数打卡") }
     }
     fun confirmDay(id:String,today:LocalDate=LocalDate.now()):Unit=ProjectPreferences.atomic(context) {
         val h=habits().first { it.id==id };require(h.input==HabitInput.DAILY) { "这个习惯不是每日确认" }
         val old=entries().find { it.habitId==id && it.date==today }
-        record(HabitEntry(id,today,if(h.smoking) 0 else 1,old?.note ?: ""),today)
+        recordEntry(HabitEntry(id,today,if(h.smoking) 0 else 1,old?.note ?: ""),today,"每日确认")
     }
     private fun write(all:List<Habit>,entries:List<HabitEntry>) { prefs.edit().putString("habits",encode(all,entries).toString()).apply() }
     companion object {

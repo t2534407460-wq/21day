@@ -71,7 +71,7 @@ class CoachIntegrationTest {
         store.createPlan(Plan());val before=store.export()
         context.startActivity(Intent(context,CoachActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
         val device=UiDevice.getInstance(instrumentation)
-        assertTrue(device.wait(Until.hasObject(By.text("从今晚的小事聊起。")),15000))
+        assertTrue(device.wait(Until.hasObject(By.text("从记录里，看见每天。")),15000))
         device.findObject(By.text("今日总结")).click()
         assertTrue(device.wait(Until.hasObject(By.text("助手设置")),5000))
         assertTrue(device.hasObject(By.text("API 与自动复盘设置")))

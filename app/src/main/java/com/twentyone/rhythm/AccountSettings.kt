@@ -70,7 +70,7 @@ import kotlinx.coroutines.CancellationException
                     Text(status!!,fontWeight=FontWeight.SemiBold)
                 }
             }
-            SmallNote("同一邮箱可登录廿一与时屿，知识库权限独立授予。")
+            SmallNote("同一邮箱可登录廿一与时屿。")
             HorizontalDivider(color=Sage)
             TextButton(enabled=!busy,onClick={logoutConfirm=true}) { Text("退出登录",color=Muted) }
         }
@@ -102,7 +102,7 @@ import kotlinx.coroutines.CancellationException
                 TextButton(enabled=!busy,onClick={challenge=null;code="";message=""}) { Text("修改邮箱或重新发送") }
             }
         }
-        SmallNote("账号通用于廿一与时屿，知识库权限独立授予。登录后可自行开启同步。")
+        SmallNote("账号通用于廿一与时屿。登录后可自行开启同步。")
     }
     if(message.isNotBlank()) Surface(color=if(failed)MaterialTheme.colorScheme.errorContainer else Sage,shape=RoundedCornerShape(14.dp)) {
         Text(message,Modifier.fillMaxWidth().padding(16.dp),color=if(failed)MaterialTheme.colorScheme.onErrorContainer else Ink,fontSize=14.sp)

@@ -42,7 +42,12 @@ class Store(private val context: Context) {
             val applyAt = window?.end?.epoch() ?: LocalDate.now().plusDays(1).atStartOfDay().epoch()
             prefs.edit().putString("pending_rules",encodeRules(value).toString()).putLong("pending_at",applyAt).apply()
             event("调整规则", "当前夜间结束后生效"); true
-        } else { prefs.edit().putString("rules",encodeRules(value).toString()).remove("pending_at").remove("pending_rules").apply(); false }
+        } else {
+            val before=rules
+            prefs.edit().putString("rules",encodeRules(value).toString()).remove("pending_at").remove("pending_rules").apply()
+            if(before!=value) event("调整规则","睡前 ${timeText(value.bed)} · 起床 ${timeText(value.wake)} · 已生效")
+            false
+        }
     }
     fun createPlan(value: Plan) { put("plan", JSONObject().put("start", value.start).put("action", value.action).put("goal", value.goal)) }
     var wake: WakeSession
@@ -67,7 +72,8 @@ class Store(private val context: Context) {
             plan?.let { Schedule.night(it,current,now) }==null) return@atomic false
         prefs.edit().putString("pass_package",pkg).putString("pass_day",now.toLocalDate().toString())
             .putInt("pass_count",DAILY_PASSES-remaining+1).putLong("pass_until",now.epoch()+PASS_MINUTES*60_000L).apply()
-        event("临时放行", "$pkg · $PASS_MINUTES 分钟 · 今日第 ${DAILY_PASSES-remaining+1} 次")
+        val name=runCatching { context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(pkg,0)).toString() }.getOrDefault(pkg)
+        event("临时放行", "$name · $PASS_MINUTES 分钟 · 今日第 ${DAILY_PASSES-remaining+1} 次",now.epoch())
         true
     }
     val qrToken: String get() = prefs.getString("qr_token", null) ?: ("rhythm://wake/" + UUID.randomUUID()).also { prefs.edit().putString("qr_token", it).apply() }
@@ -76,15 +82,17 @@ class Store(private val context: Context) {
         set(value) { prefs.edit().putString("nfc_id", value).apply() }
     fun logs(): List<DayLog> = json("logs").let { all -> all.keys().asSequence().map { key -> decodeLog(all.getJSONObject(key)) }.toList().sortedBy { it.day } }
     fun log(day: String) = logs().firstOrNull { it.day == day } ?: DayLog(day)
+    fun nightStatus(date:LocalDate)=BedtimeSchedule.status(date,log(date.toString()),log(date.plusDays(1).toString()))
     fun saveLog(v: DayLog)=ProjectPreferences.atomic(context) { put("logs", json("logs").put(v.day, encodeLog(v))) }
     fun updateLog(day:String,change:(DayLog)->DayLog)=ProjectPreferences.atomic(context) { saveLog(change(log(day))) }
-    fun completeBedtime(day:String,now:LocalDateTime=LocalDateTime.now()) {
+    fun completeBedtime(day:String,now:LocalDateTime=LocalDateTime.now()):Unit=ProjectPreferences.atomic(context) {
         val p=plan ?: error("请先设置计划")
         require(BedtimeSchedule.recordDay(p,rules,now).toString()==day) { "这个夜晚的打卡时间已结束，请返回查看当前记录" }
         updateLog(day) { latest ->
             require(BedtimeSchedule.answered(latest)) { "请先回答困意、心情和影响原因" }
             latest.copy(bedtimeCheckedAt=latest.bedtimeCheckedAt.takeIf { it>0 } ?: now.epoch())
         }
+        event("睡前打卡", "$day 晚 · 困意 ${log(day).sleepiness} · 心情 ${log(day).bedMood} · 影响 ${log(day).bedReason}",now.epoch())
     }
     fun applyCoachDrafts(drafts:List<CoachDraft>,originals:Map<String,DayLog>):Unit=ProjectPreferences.atomic(context) {
         require(drafts.isNotEmpty() && drafts.map { it.day }.distinct().size==drafts.size)
@@ -96,10 +104,11 @@ class Store(private val context: Context) {
         }
         merged.forEach { all.put(it.day,encodeLog(it)) }
         put("logs",all)
+        event("作息补记",drafts.joinToString("；") { "${it.day} · ${it.changes(originals.getValue(it.day)).joinToString { (label,value)->if(label=="追加备注") "追加备注" else "$label：$value" }}" })
     }
     fun events(): List<EventLog> = runCatching { JSONArray(prefs.getString("events", "[]")).let { a -> (0 until a.length()).map { a.getJSONObject(it).let { e -> EventLog(e.getLong("time"), e.getString("kind"), e.getString("detail")) } } } }.getOrDefault(emptyList())
-    fun event(kind: String, detail: String):Unit=ProjectPreferences.atomic(context) {
-        val list = (events() + EventLog(System.currentTimeMillis(), kind, detail)).takeLast(500)
+    fun event(kind: String, detail: String,at:Long=System.currentTimeMillis()):Unit=ProjectPreferences.atomic(context) {
+        val list = events() + EventLog(at, kind, detail)
         prefs.edit().putString("events", JSONArray().also { a -> list.forEach { a.put(JSONObject().put("time", it.time).put("kind", it.kind).put("detail", it.detail)) } }.toString()).apply()
     }
     fun export(): String = JSONObject().put("schema", 2).put("plan", json("plan")).put("rules", encodeRules(rules)).put("logs", json("logs")).put("habits",JSONObject(prefs.getString("habits","{\"plans\":[],\"entries\":[]}")!!)).put("events", JSONArray(prefs.getString("events", "[]"))).toString(2)
@@ -113,10 +122,15 @@ class Store(private val context: Context) {
         val habits=if(root.getInt("schema")==2) root.getJSONObject("habits").also { HabitStore.decode(it) } else null
         val r = decodeRules(root.getJSONObject("rules")); require(r.valid()) { "备份中的作息时间不正确" }
         val logs = root.getJSONObject("logs")
+        val events=if(root.has("events")) root.getJSONArray("events") else null
+        events?.let { list -> for(i in 0 until list.length()) {
+            val e=list.getJSONObject(i);require(e.getLong("time")>=0);e.getString("kind");e.getString("detail")
+        } }
         require(logs.length() <= 10000)
         logs.keys().forEach { key -> require(LocalDate.parse(key).toString() == key); val l = decodeLog(logs.getJSONObject(key)); require(l.day == key); require(l.status in listOf("完成", "部分完成", "未完成", "未记录")); require(l.bed.isEmpty() || parseTime(l.bed) != null); require(l.rise.isEmpty() || parseTime(l.rise) != null); require(l.sleepiness.isEmpty() || l.sleepiness in BedtimeSchedule.sleepiness); require(l.bedMood.isEmpty() || l.bedMood in BedtimeSchedule.moods); require(l.bedReason.isEmpty() || l.bedReason in BedtimeSchedule.reasons); require(l.bedtimeCheckedAt>=0 && (l.bedtimeCheckedAt==0L || BedtimeSchedule.answered(l))) }
         // Validate everything before committing; active restrictions, tokens and permissions are never imported.
         val edit = prefs.edit().putString("rules", encodeRules(r).toString()).putString("logs", logs.toString())
+        if(events!=null) edit.putString("events",events.toString())
         if(newPlan==null) edit.remove("plan") else edit.putString("plan",p.put("action",newPlan.action).put("goal",newPlan.goal).toString())
         if(habits!=null) edit.putString("habits",habits.toString()).remove("habit_alarm_at").remove("habit_reminded").remove("habit_timers")
         edit.remove("pending_at").remove("pending_rules").remove("wake").apply()

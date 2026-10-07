@@ -33,10 +33,6 @@ import androidx.compose.ui.window.DialogProperties
 import kotlin.math.*
 
 data class OrbOption(val label:String,val icon:ImageVector,val color:Color)
-val ActionOptions=listOf(
-    OrbOption("完成",Icons.Outlined.Done,Moss),OrbOption("部分完成",Icons.Outlined.Remove,Color(0xFF87964D)),
-    OrbOption("未完成",Icons.Outlined.Close,Clay),OrbOption("未记录",Icons.Outlined.MoreHoriz,Muted)
-)
 private val SleepinessOptions=listOf(
     OrbOption("很困了",Icons.Outlined.Bedtime,Moss),OrbOption("有点困",Icons.Outlined.DarkMode,Color(0xFF87964D)),
     OrbOption("还不困",Icons.Outlined.WbSunny,Clay)
@@ -183,10 +179,7 @@ private val ReasonOptions=listOf(
                                 SummaryLine("心情",initial.bedMood)
                                 SummaryLine("影响原因",initial.bedReason)
                                 if(initial.bed.isNotEmpty()) SummaryLine("上床",initial.bed)
-                                SmallNote("睡前小行动 · 可选回顾")
-                                ActionOptions.chunked(2).forEach { row -> Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                                    row.forEach { option -> FilterChip(colors=FilterChipDefaults.filterChipColors(selectedContainerColor=Sage,selectedLabelColor=Ink),selected=initial.status==option.label,onClick={onChange{it.copy(status=option.label)}},label={Text(option.label)}) }
-                                } }
+                                SmallNote("每日状态根据睡前打卡和次晨验证自动计算，无需选择。休息日只需完成睡前打卡。")
                                 if(initial.note.isNotBlank()) SmallNote(initial.note)
                                 if(BedtimeSchedule.checked(initial)) SmallNote("已完成 · ${stamp(initial.bedtimeCheckedAt)}")
                             }

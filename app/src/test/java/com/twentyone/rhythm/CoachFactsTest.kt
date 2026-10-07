@@ -11,12 +11,12 @@ class CoachFactsTest {
         assertNull(CoachAnalysis.averageTime(listOf("bad","")))
         assertNull(CoachAnalysis.averageTime(listOf("00:00","12:00")))
     }
-    @Test fun missingAndFutureRecordsDoNotBecomeFailures() {
+    @Test fun missingRecordsAndFutureLogsAreSeparateFromAutomaticCompletion() {
         val facts=CoachAnalysis.facts(listOf(DayLog("2026-10-03",energy="一般"),DayLog("2026-10-04","完成"),DayLog("2026-09-01","完成")),today,7)
         assertEquals(1,facts.recorded)
         assertTrue(facts.text.contains("未记录 6 天"))
-        assertTrue(facts.text.contains("未完成 0 天"))
-        assertFalse(facts.text.contains("2026-10-04"))
+        assertTrue(facts.text.contains("未完成 1 天"))
+        assertFalse(facts.text.contains("2026-10-04："))
     }
     @Test fun verificationAndBedTimeAreNotSleepEvidence() {
         val facts=CoachAnalysis.facts(listOf(DayLog(today.toString(),bed="23:00",rise="07:00",verifiedAt=1234)),today,1)

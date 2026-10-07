@@ -72,7 +72,7 @@ class RestWakeFlowTest {
         assertTrue(device.wait(Until.hasObject(By.text("今天")),8000));seed()
         instrument.runOnMainSync { ContextCompat.startForegroundService(c,Intent(c,WakeAlarmService::class.java)) }
         val end=System.currentTimeMillis()+4000
-        while(s.wake.active && System.currentTimeMillis()<end) Thread.sleep(50)
+        while((s.wake.active || notifications.activeNotifications.any { it.id==21 }) && System.currentTimeMillis()<end) Thread.sleep(50)
         assertFalse(s.wake.active)
         assertFalse(notifications.activeNotifications.any { it.id==21 })
         seed();c.startActivity(Intent(c,WakeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

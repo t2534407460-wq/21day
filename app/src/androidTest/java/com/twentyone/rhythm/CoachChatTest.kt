@@ -61,7 +61,9 @@ class CoachChatTest {
         if(device.currentPackageName!=c.packageName) device.pressBack()
         assertTrue(device.wait(Until.hasObject(By.text("还没发送的想法")),7000))
         assertTrue(CoachChat.load(c).isEmpty());assertEquals(before,Store(c).export())
-        device.wait(Until.findObject(By.text("改用输入法语音")),5000).click();device.waitForIdle()
+        if(!device.wait(Until.hasObject(By.text("改用输入法语音")),5000)) runCatching { UiScrollable(UiSelector().scrollable(true)).scrollTextIntoView("改用输入法语音") }
+        val fallback=device.wait(Until.findObject(By.text("改用输入法语音")),5000)
+        assertNotNull("Voice fallback must be reachable",fallback);fallback.click();device.waitForIdle()
         awaitVoicePreference(true)
         assertTrue(device.hasObject(By.text("还没发送的想法")))
         if(device.executeShellCommand("dumpsys input_method").contains("mInputShown=true")) device.pressBack()

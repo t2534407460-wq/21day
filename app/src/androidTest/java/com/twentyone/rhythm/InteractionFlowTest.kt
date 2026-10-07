@@ -69,7 +69,7 @@ class InteractionFlowTest {
         tap("也可以点选");tap("手机")
         assertEquals("手机",store.log(LocalDate.now().toString()).bedReason)
         assertEquals(0L,store.log(LocalDate.now().toString()).bedtimeCheckedAt)
-        UiScrollable(UiSelector().scrollable(true)).scrollIntoView(UiSelector().text("完成睡前打卡"))
+        if(!device.hasObject(By.text("完成睡前打卡"))) UiScrollable(UiSelector().scrollable(true)).scrollIntoView(UiSelector().text("完成睡前打卡"))
         tap("完成睡前打卡");tap("知道了")
         assertTrue(BedtimeSchedule.checked(store.log(LocalDate.now().toString())))
         assertEquals(0L,store.log(LocalDate.now().toString()).verifiedAt)

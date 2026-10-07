@@ -58,6 +58,38 @@ class PlatformFlowTest {
         assertTrue(store.log(store.wake.day).verifiedAt>0)
     }
     private fun instrumentVerify(){instrumentation.runOnMainSync { assertTrue(Alarms.verify(context)) }}
+    private fun foregroundDiagnostic():String {
+        val service=NightAccessibilityService.instance ?: return "service unavailable"
+        return "flags=${service.serviceInfo.flags}, capabilities=${service.serviceInfo.capabilities}, windows="+service.windows.joinToString { "type=${it.type},active=${it.isActive},focused=${it.isFocused},package=${it.root?.packageName}" }
+    }
+    @Test fun lateBackgroundWindowEventsAfterHomeDoNotReopenRestriction() {
+        Assume.assumeTrue(android.os.Build.HARDWARE in listOf("ranchu","goldfish"))
+        automation.executeShellCommand("settings put secure enabled_accessibility_services null").close()
+        android.os.SystemClock.sleep(300)
+        automation.executeShellCommand("settings put secure enabled_accessibility_services com.twentyone.rhythm/com.twentyone.rhythm.NightAccessibilityService").close()
+        val deadline=System.currentTimeMillis()+7000
+        while(NightAccessibilityService.instance==null && System.currentTimeMillis()<deadline) android.os.SystemClock.sleep(100)
+        val now=LocalDateTime.now();val minute=now.hour*60+now.minute;val target="com.android.chrome"
+        store.createPlan(Plan(LocalDate.now().minusDays(1)));store.rules=Rules(bed=(minute+1438)%1440,wake=(minute+20)%1440,blocked=setOf(target))
+        val launch=context.packageManager.getLaunchIntentForPackage(target)!!
+        context.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val intercepted=device.wait(Until.hasObject(By.text("回到桌面")),7000)
+        if(!intercepted) device.takeScreenshot(java.io.File(context.getExternalFilesDir(null),"restriction-diagnostic.png"))
+        assertTrue(foregroundDiagnostic(),intercepted)
+        device.findObject(By.text("回到桌面")).click()
+        assertTrue(device.wait(Until.gone(By.text("回到桌面")),3000))
+        repeat(5) {
+            instrumentation.runOnMainSync {
+                val event=android.view.accessibility.AccessibilityEvent.obtain(android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED)
+                event.packageName=target;event.className="android.app.Dialog"
+                NightAccessibilityService.instance!!.onAccessibilityEvent(event);event.recycle()
+            }
+            android.os.SystemClock.sleep(1200);automation.clearCache()
+            assertFalse("A background app event must not reopen the overlay on HOME",device.hasObject(By.text("回到桌面")))
+        }
+        context.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        assertTrue("Reopening the restricted app must still block",device.wait(Until.hasObject(By.text("回到桌面")),7000))
+    }
     @Test fun selectedAppHasThreeImmediatePassesAndNoEmergencyBypass() {
         // Instrumentation restarts the app process; reconnect the service in this disposable emulator.
         automation.executeShellCommand("settings put secure enabled_accessibility_services null").close()
@@ -78,7 +110,7 @@ class PlatformFlowTest {
         store.prefs.edit().putString("emergency_night",Schedule.night(store.plan!!,store.rules,LocalDateTime.now())!!.date.toString()).apply()
         val directory=java.io.File(context.getExternalFilesDir(null),"usability-qa").apply { mkdirs() }
         repeat(3) { index ->
-            assertTrue("Selected app should be intercepted",device.wait(Until.hasObject(By.text("临时使用 5 分钟")),5000))
+            assertTrue("Selected app should be intercepted; "+foregroundDiagnostic(),device.wait(Until.hasObject(By.text("临时使用 5 分钟")),5000))
             assertTrue(device.hasObject(By.text("今日剩余 ${3-index} / 3 次")))
             assertFalse(device.hasObject(By.textContains("紧急结束")))
             if(index==0)device.takeScreenshot(java.io.File(directory,"restriction.png"))

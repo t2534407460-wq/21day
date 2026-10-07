@@ -52,7 +52,7 @@ fun stamp(at:Long):String=Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(3.dp)) {
             repeat(21) { index ->
                 val d=p.start.plusDays(index.toLong())
-                Box(Modifier.weight(1f).height(5.dp).background(if(BedtimeSchedule.checked(s.log(d.toString()))) Lime else Color.White.copy(alpha=.18f),RoundedCornerShape(3.dp)))
+                Box(Modifier.weight(1f).height(5.dp).background(when(s.nightStatus(d)) { "已完成"->Lime;"部分完成"->Clay;else->Color.White.copy(alpha=.18f) },RoundedCornerShape(3.dp)))
             }
         }
         SmallLight("${p.start.format(DateTimeFormatter.ofPattern("MM.dd"))} 晚 — ${p.start.plusDays(21).format(DateTimeFormatter.ofPattern("MM.dd"))} 早 · 一晚接次晨")
@@ -70,7 +70,7 @@ fun stamp(at:Long):String=Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()
                 val index=selected/7*7+column;val d=p.start.plusDays(index.toLong());val active=index==selected
                 val bedDone=BedtimeSchedule.checked(s.log(d.toString()));val wakeDone=s.log(d.plusDays(1).toString()).verifiedAt>0
                 Column(Modifier.weight(1f).background(if(active) Moss else Color.Transparent,RoundedCornerShape(14.dp))
-                    .clickable { selected=index }.semantics(mergeDescendants=true) { contentDescription="第 ${index+1} 天，${d} 晚，睡前${if(bedDone) "已打卡" else "未打卡"}，醒后${if(wakeDone) "已验证" else if(RestCalendar.isRest(d.plusDays(1))) "休息日自然醒" else "未验证"}" }
+                    .clickable { selected=index }.semantics(mergeDescendants=true) { contentDescription="第 ${index+1} 天，${d} 晚，${if(d.isAfter(now.toLocalDate())) "尚未开始" else s.nightStatus(d)}，睡前${if(bedDone) "已打卡" else "未打卡"}，醒后${if(wakeDone) "已验证" else if(RestCalendar.isRest(d.plusDays(1))) "休息日自然醒" else "未验证"}" }
                     .padding(vertical=10.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(7.dp)) {
                     Text("${index+1}".padStart(2,'0'),fontSize=18.sp,fontWeight=FontWeight.Medium,color=if(active) Color.White else Ink)
                     Text("${d.monthValue}.${d.dayOfMonth}",fontSize=10.sp,color=if(active) Color.White.copy(alpha=.75f) else Muted)
@@ -86,6 +86,8 @@ fun stamp(at:Long):String=Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()
     Sheet {
         Eyebrow("DAY ${(selected+1).toString().padStart(2,'0')}  ·  这一晚与次晨")
         Text("${date.format(DateTimeFormatter.ofPattern("MM.dd"))} 晚  →  ${morning.format(DateTimeFormatter.ofPattern("MM.dd"))} 早",fontSize=24.sp,fontWeight=FontWeight.Medium)
+        Text(if(date.isAfter(now.toLocalDate())) "尚未开始" else s.nightStatus(date),color=Moss,fontWeight=FontWeight.SemiBold)
+        SmallNote(if(RestCalendar.isRest(morning)) "休息日：睡前打卡完成即为已完成。" else "工作日：睡前打卡和次晨验证两项完成才为已完成；一项为部分完成，两项未完成为未完成。")
         HorizontalDivider(color=Sage)
         Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
             Box(Modifier.size(40.dp).background(Sage,CircleShape),contentAlignment=Alignment.Center){Icon(Icons.Outlined.DarkMode,null,tint=Moss)}
@@ -110,7 +112,7 @@ fun stamp(at:Long):String=Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()
             }
         }
         val details=buildList {
-            if(eveningLog.status!="未记录") add("睡前小行动：${eveningLog.status}")
+            if(eveningLog.status!="未记录") add("旧版小行动自评：${eveningLog.status}（不作为每日完成度）")
             if(eveningLog.bed.isNotBlank()) add("自述上床：${eveningLog.bed}")
             if(morningLog.rise.isNotBlank()) add("晨间时间记录：${morningLog.rise}（验证结果以上方为准）")
             if(morningLog.energy.isNotBlank()) add("自述晨间精神：${morningLog.energy}")

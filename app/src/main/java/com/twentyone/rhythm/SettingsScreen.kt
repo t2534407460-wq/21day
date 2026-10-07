@@ -42,7 +42,7 @@ import java.time.format.DateTimeFormatter
         Heading("设置")
         SmallNote("把需要的安排，放在容易找到的地方。")
         Sheet {
-            listOf("账号" to "邮箱登录、注册与同步", "三端互通" to "时屿关联事项、知识库密钥与查询", "作息计划" to "睡前与起床时间、应用约束", "习惯与复盘" to "管理计划、每周与21天看板", "AI 助手" to "DeepSeek API Key、自动总结、语音", "权限与后台" to "通知、锁屏、自启动与任务卡片", "起床验证" to "二维码、NFC与验证试用", "数据与更新" to "备份、隐私、检查更新").forEach { (title,detail) -> SettingLink(title,detail) { onCategory(title) } }
+            listOf("账号" to "邮箱登录、注册与同步", "时屿连接" to "同一账号的时屿关联事项", "作息计划" to "睡前与起床时间、应用约束", "习惯与复盘" to "管理计划、每周与21天看板", "AI 助手" to "DeepSeek API Key、自动总结、语音", "权限与后台" to "通知、锁屏、自启动与任务卡片", "起床验证" to "二维码、NFC与验证试用", "数据与更新" to "备份、隐私、检查更新").forEach { (title,detail) -> SettingLink(title,detail) { onCategory(title) } }
         }
         SmallNote("廿一 ${BuildConfig.VERSION_NAME}")
         return
@@ -55,7 +55,7 @@ import java.time.format.DateTimeFormatter
     }
     if(category=="AI 助手") AiSettings(a,onMessage)
     if(category=="账号") AccountSettings(a)
-    if(category=="三端互通") InteropScreen(a,onAccount={onCategory("账号")})
+    if(category=="时屿连接") InteropScreen(a,onAccount={onCategory("账号")})
     if(category=="作息计划") Sheet {
         Text("作息与约束",fontWeight=FontWeight.SemiBold)
         SettingLink("我的作息时间","${timeText(r.bed)} — ${timeText(r.wake)}",onEdit)
@@ -184,7 +184,7 @@ fun qrBitmap(token:String):Bitmap {
         Text("通用习惯计划、打卡、时段与备注保存在本机，随新版 JSON 备份导出；正在进行的计时不进入备份，恢复备份会结束未保存的计时。趋势在本机计算。开启自动复盘且已填写 API Key 后，每周日和习惯满21天时会在后台向 DeepSeek 发送周期内的习惯名称、目标、日期、数值及作息统计，按你的 API 账户计费。备注、验证点和聊天不用于自动复盘。")
         Text("计划、打卡、起床验证、例外记录、助手总结与聊天保存在本机，没有广告或分析 SDK。打开 App 时最多每6小时静默访问 GitHub 检查新版，手动检查仍可用，不上传记录。使用 DeepSeek 聊天时发送近7天作息统计与最近最多12条聊天消息，快捷总结发送所选日期统计，补记发送本次输入文字和对应日期。请求直接发给 DeepSeek 官方 API，数据处理遵循其服务政策。聊天在本机保留最近60条；聊天与AI复盘结果不进入作息备份。")
         Text("语音输入调用手机的识别服务，可能由该服务联网处理。廿一只接收识别文字，不保存录音；文字可修改，点击发送后才提交给 DeepSeek。没有兼容服务时可使用输入法语音。")
-        Text("模型 API Key 和知识库只读密钥使用 Android Keystore 加密保存在本机，不进入 JSON 或系统备份。知识查询只发送你的查询文字，收藏、批注和习惯引用按登录账号保存。停止 AI 请求不能撤回已发送内容，服务端可能已处理并计费。对话补记需确认后保存，建议不会自动调整计划或闹钟。")
+        Text("模型 API Key 使用 Android Keystore 加密保存在本机，不进入 JSON 或系统备份。主动聊天向 DeepSeek 发送所选日期范围的作息、习惯和操作历史；不发送自由备注或验证点。停止 AI 请求不能撤回已发送内容，服务端可能已处理并计费。对话补记需确认后保存，建议不会自动调整计划或闹钟。")
         Text("在账号页确认开启同步后，习惯、作息历史、聊天、复盘和普通设置会保存到独立项目服务，以便其他设备恢复。离线修改联网后重试；冲突需要选择保留版本，旧变更留在本机冲突历史。模型密钥和二维码/NFC验证点仅在你主动选择备份保护配置时走独立加密通道；服务器可在授权后解密，不是端到端加密。手机系统权限仍需本机授权。退出账号保留本机数据和归属。")
         Text("应用限制只识别当前应用包名，不获取屏幕内容。相机只在你主动扫码时使用，不保存照片。NFC 只识别你绑定的标签。")
         Text("睡前到点锁屏通过系统设备管理授权执行，只申请锁屏能力，不更改密码、不清除数据。到计划睡前时间仍未打卡时，每晚锁屏一次；授权可在系统安全设置撤销。")

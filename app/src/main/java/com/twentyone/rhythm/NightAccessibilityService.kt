@@ -12,6 +12,7 @@ import android.content.res.ColorStateList
 import android.os.*
 import android.view.*
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityWindowInfo
 import android.widget.*
 import java.time.LocalDateTime
 import java.time.LocalDate
@@ -19,7 +20,6 @@ import java.time.format.DateTimeFormatter
 
 class NightAccessibilityService : AccessibilityService() {
     private val handler=Handler(Looper.getMainLooper())
-    private var currentPackage=""
     private var overlay: ScrollView?=null
     private var preview=false
     private var shownPackage=""
@@ -28,13 +28,20 @@ class NightAccessibilityService : AccessibilityService() {
     private val ticker=object:Runnable { override fun run() { reconcile(); handler.postDelayed(this,1000) } }
     override fun onServiceConnected() { instance=this; handler.post(ticker) }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        val pkg=event?.packageName?.toString() ?: return
-        if(pkg==packageName && (event.className?.toString() ?: "") !in setOf(MainActivity::class.java.name,WakeActivity::class.java.name,ScannerActivity::class.java.name)) return
-        currentPackage=pkg
         if(!preview) reconcile()
+    }
+    private fun foregroundPackage():String {
+        // Background apps can still emit window events after HOME. Only inspect the visible window's package.
+        val visible=windows.filter { it.type!=AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY }
+        // Our touchable overlay can take focus; getWindows still exposes the application directly below it.
+        val window=visible.firstOrNull { it.isActive || it.isFocused }
+            ?: visible.firstOrNull { it.type==AccessibilityWindowInfo.TYPE_APPLICATION } ?: return ""
+        val root=window.root ?: return ""
+        return try { root.packageName?.toString() ?: "" } finally { @Suppress("DEPRECATION") root.recycle() }
     }
     private fun reconcile() {
         if(preview) return
+        val currentPackage=foregroundPackage()
         val s=Store(this); val hadPending=s.pendingAt>0;s.applyPending()
         if(hadPending && s.pendingAt==0L) Alarms.schedule(this)
         val n=s.plan?.let { Schedule.night(it,s.rules,LocalDateTime.now()) }
@@ -92,7 +99,7 @@ class NightAccessibilityService : AccessibilityService() {
         card.addView(text("今日剩余 $remaining / ${Store.DAILY_PASSES} 次",17f,moss).apply { typeface=Typeface.create("sans-serif-medium",Typeface.NORMAL);setPadding(0,dp(18),0,dp(6)) })
         card.addView(text(if(remaining>0)"每次 5 分钟，无需等待\n所有受限应用共用，每天 0 点重置" else "今天的临时使用次数已用完\n明天 0 点恢复额度",13f,muted))
         layout.addView(button(if(isPreview)"结束预览" else "回到桌面",true) {
-            preview=false;if(!isPreview){performGlobalAction(GLOBAL_ACTION_HOME);currentPackage=""};hide()
+            preview=false;if(!isPreview)performGlobalAction(GLOBAL_ACTION_HOME);hide()
         })
         if(!isPreview && n!=null && remaining>0)layout.addView(button("临时使用 5 分钟",false) {
             if(s.grantPass(pkg))hide()else showBlock(pkg,false)

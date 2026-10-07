@@ -116,7 +116,7 @@ class MainActivity : ComponentActivity() {
         else { logDay=null;message="这个夜晚的打卡时间已结束，请查看当前日期。" }
     },onComplete={
         runCatching { s.completeBedtime(day);Alarms.schedule(activity) }
-            .onSuccess { logDay=null;message="睡前打卡已保存。醒后完成起床验证，记录会自动接上。" }
+            .onSuccess { logDay=null;message=if(RestCalendar.isRest(LocalDate.parse(day).plusDays(1))) "睡前打卡已保存。休息日记录已完成，无需起床验证。" else "睡前打卡已保存。醒后完成起床验证，记录会自动接上。" }
             .onFailure { message=it.message }
     }) }
     message?.let { text -> AlertDialog(onDismissRequest={message=null},title={Text("廿一")},text={Text(text)},confirmButton={TextButton(onClick={message=null}){Text("知道了")}}) }
@@ -176,9 +176,10 @@ class MainActivity : ComponentActivity() {
     Row(Modifier.fillMaxWidth().clickable(onClick=onPlan),horizontalArrangement=Arrangement.SpaceBetween) { Text("我的 21 天",fontWeight=FontWeight.SemiBold); Text("查看计划  →",color=Moss,fontSize=13.sp) }
     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
         val week=((day.coerceIn(1,21)-1)/7)*7
-        repeat(7){i-> val date=p.start.plusDays((week+i).toLong()); val logged=s.log(date.toString()); val isToday=date==now.toLocalDate()
+        repeat(7){i-> val date=p.start.plusDays((week+i).toLong()); val isToday=date==now.toLocalDate()
             Column(Modifier.weight(1f),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.size(34.dp).background(if(BedtimeSchedule.checked(logged)) Moss else if(isToday) Lime else Sage,CircleShape),contentAlignment=Alignment.Center) { Text(if(BedtimeSchedule.checked(logged)) "✓" else "${week+i+1}",color=if(BedtimeSchedule.checked(logged)) Color.White else Ink,fontSize=13.sp) }
+                val state=s.nightStatus(date);val complete=state=="已完成"
+                Box(Modifier.size(34.dp).background(if(complete) Moss else if(state=="部分完成") Lime else Sage,CircleShape),contentAlignment=Alignment.Center) { Text(if(complete) "✓" else if(state=="部分完成") "◐" else "${week+i+1}",color=if(complete) Color.White else Ink,fontSize=13.sp) }
                 Text(if(isToday) "今天" else date.dayOfWeek.getDisplayName(java.time.format.TextStyle.NARROW,java.util.Locale.CHINESE),color=Muted,fontSize=11.sp)
             }
         }
@@ -196,9 +197,9 @@ class MainActivity : ComponentActivity() {
     val done=logs.count { BedtimeSchedule.checked(it) }; val verified=(1L..21L).count { s.log(p.start.plusDays(it).toString()).verifiedAt>0 }
     Eyebrow("SMALL CHANGES, REAL PROGRESS"); Heading("看见自己的变化。")
     Sheet(color=Sage) {
-        Text("DeepSeek 作息助手",fontWeight=FontWeight.SemiBold)
-        SmallNote("打字或语音转文字，聊聊作息、回顾今天与最近7天，也能补记。")
-        Primary("打开作息助手",click=onCoach)
+        Text("DeepSeek 记录助手",fontWeight=FontWeight.SemiBold)
+        SmallNote("回顾作息、习惯打卡、计时与临时使用；历史记录可选日期范围，也能补记作息自述。")
+        Primary("打开记录助手",click=onCoach)
     }
     Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
         Sheet(Modifier.weight(1f),Sage) { Eyebrow("睡前已打卡"); LargeNumber("$done"); SmallNote("天 / 本轮 21 天") }
@@ -217,6 +218,7 @@ class MainActivity : ComponentActivity() {
             val evening=s.log(date.toString());val morning=s.log(date.plusDays(1).toString())
             Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
                 Text("${date.format(DateTimeFormatter.ofPattern("MM.dd"))} 晚 → ${date.plusDays(1).format(DateTimeFormatter.ofPattern("MM.dd"))} 早",fontSize=14.sp)
+                Text(s.nightStatus(date),fontSize=14.sp,color=Moss)
                 SmallNote("睡前："+(if(BedtimeSchedule.checked(evening)) stamp(evening.bedtimeCheckedAt) else if(evening.bed.isNotBlank()) "自述上床 ${evening.bed}" else "未打卡")+
                     "\n醒后："+(if(morning.verifiedAt>0) "${stamp(morning.verifiedAt)} 已验证" else if(morning.rise.isNotBlank()) "自述起床 ${morning.rise} · 未验证" else "未验证"))
             }

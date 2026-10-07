@@ -124,7 +124,7 @@ internal object SyncCodec {
         val habits=JSONObject().put("plans",plans).put("entries",entries);HabitStore.decode(habits)
         desired["rhythm" to "rules"]?.let { require(Store.decodeRules(JSONObject(it.value)).valid()) }
         set("rhythm","habits",habits.toString());set("rhythm","habit_timers",timers.toString());set("rhythm","logs",logs.toString())
-        set("rhythm","events",JSONArray(events.sortedBy { it.getLong("time") }.takeLast(500)).toString())
+        set("rhythm","events",JSONArray(events.sortedBy { it.getLong("time") }).toString())
         set("coach_chat","messages",JSONArray(chats.sortedWith(compareBy<JSONObject>{it.getLong("at")}.thenBy{it.getString("id")} ).takeLast(60)).toString())
         val changes=linkedMapOf<String,MutableList<String>>()
         val existing=linkedMapOf<Pair<String,String>,PreferenceValue>()

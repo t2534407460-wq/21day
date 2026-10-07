@@ -54,8 +54,6 @@ object ProjectAccount {
         return prefs.getString("id",null) ?: UUID.randomUUID().toString().also { check(prefs.edit().putString("id",it).commit()) }
     }
     internal fun userId(c:Context):String?=read(c,"session")?.getString("userId")
-    internal fun knowledgeKey(c:Context):String=read(c,"knowledge")?.optString("key") ?: ""
-    internal fun saveKnowledgeKey(c:Context,value:String) { require(value.isEmpty() || value.length in 32..256);if(value.isEmpty())file(c,"knowledge").delete()else write(c,"knowledge",JSONObject().put("key",value)) }
     private fun post(path:String,data:JSONObject):JSONObject? {
         val connection=URL(endpoint+path).openConnection() as HttpsURLConnection
         connection.instanceFollowRedirects=false;connection.connectTimeout=15000;connection.readTimeout=30000

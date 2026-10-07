@@ -57,12 +57,12 @@ class UsabilityFlowTest {
         Store(context).saveLog(DayLog(LocalDate.now().toString(),note="保留原记录"))
         val before=Store(context).export()
         launch();tap("设置")
-        val sections=listOf("账号" to "欢迎回来","三端互通" to "知识库","作息计划" to "作息与约束","习惯与复盘" to "管理习惯计划","AI 助手" to "DeepSeek 连接","权限与后台" to "权限与可靠性","起床验证" to "我的起床二维码","数据与更新" to "检查更新")
+        val sections=listOf("账号" to "欢迎回来","时屿连接" to "时屿关联事项","作息计划" to "作息与约束","习惯与复盘" to "管理习惯计划","AI 助手" to "DeepSeek 连接","权限与后台" to "权限与可靠性","起床验证" to "我的起床二维码","数据与更新" to "检查更新")
         sections.forEachIndexed { index,(category,content) ->
             tap(category)
             assertTrue(category,device.wait(Until.hasObject(By.text(content)),5000))
             capture("settings-$index")
-            if(category=="三端互通") {
+            if(category=="时屿连接") {
                 tap("前往登录")
                 assertTrue(device.wait(Until.hasObject(By.text("欢迎回来")),5000))
             }
@@ -89,8 +89,8 @@ class UsabilityFlowTest {
         tap("归档此计划");assertTrue(device.hasObject(By.text("归档阅读？")));tap("取消")
         device.pressBack();device.waitForIdle();instrumentation.uiAutomation.clearCache()
         tap("添加习惯");tap("取消")
-        tap("变化");capture("trends");tap("打开作息助手")
-        assertTrue(device.wait(Until.hasObject(By.text("作息助手")),3000))
+        tap("变化");capture("trends");tap("打开记录助手")
+        assertTrue(device.wait(Until.hasObject(By.text("记录助手")),3000))
         capture("coach");device.pressBack();device.waitForIdle()
         assertEquals(before,store.export())
     }

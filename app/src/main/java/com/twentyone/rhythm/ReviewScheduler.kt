@@ -30,7 +30,7 @@ object ReviewRunner {
         if(old?.status=="done" || (old?.status=="failed" && !retry)) return@withLock
         val habits=HabitStore(c);val h=habits.habits().find { it.id==spec.subject }
         val facts=if(h!=null) Reviews.habitFacts(h,habits.entries(),spec)
-            else CoachAnalysis.facts(Store(c).logs(),spec.to,7).text
+            else Store(c).let { CoachAnalysis.facts(it.logs(),spec.to,7,it.plan).text }
         store.save(spec.id,ReviewReport("running",facts))
         try {
             val answer=CoachInference.generate(c,Reviews.prompt(spec,facts))
