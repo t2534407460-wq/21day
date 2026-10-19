@@ -42,11 +42,18 @@ class ModelTest {
         assertEquals(WakePhase.COMPLETE,WakeSession(phase=WakePhase.WALK).verify(1000,rules.copy(secondCheck=false)).phase)
         assertEquals(WakePhase.STOPPED,WakeSession(phase=WakePhase.STOPPED).verify(1000,rules).phase)
     }
-    @Test fun remindersHaveAnUpperLimitAndDoNotRestartFinishedSession() {
+    @Test fun formalReminderHasNoRetryLimitAndCannotBeSilencedByBegin() {
         var w=WakeSession(phase=WakePhase.RINGING,attempts=1)
+        assertEquals(w,w.begin(1000))
+        repeat(100) { w=w.retry(1000L+it) }
+        assertTrue(w.active);assertEquals(WakePhase.RINGING,w.phase)
+        val stopped=w.copy(phase=WakePhase.COMPLETE)
+        assertEquals(stopped,stopped.retry(9000))
+    }
+    @Test fun trialReminderRetainsItsLimit() {
+        var w=WakeSession(phase=WakePhase.RINGING,attempts=1,test=true)
         repeat(3) { w=w.retry(1000L+it) }
         assertEquals(WakePhase.TIMED_OUT,w.phase)
-        assertEquals(w,w.retry(9000))
     }
     @Test fun invalidTimesAreRejected() {
         assertNull(parseTime("25:00")); assertNull(parseTime("abc")); assertEquals(420,parseTime("07:00"))
@@ -54,7 +61,7 @@ class ModelTest {
         assertEquals(21,plan.day(plan.start.plusDays(20)))
     }
     @Test fun quietWalkCannotBeExtendedByRepeatedBegin() {
-        val first=WakeSession(phase=WakePhase.SECOND_READY,firstAt=100).begin(1000)
+        val first=WakeSession(phase=WakePhase.SECOND_READY,firstAt=100,test=true).begin(1000)
         assertEquals(WakePhase.WALK,first.phase)
         assertEquals(first,first.begin(3000))
     }

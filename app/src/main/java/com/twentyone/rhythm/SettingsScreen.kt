@@ -115,7 +115,7 @@ import java.time.format.DateTimeFormatter
             if(!Alarms.exactAllowed(a)) onMessage("请先开启精确闹钟权限，才能验证后续提醒。")
             else { Alarms.start(a,true);a.startActivity(Intent(a,WakeActivity::class.java)) }
         }
-        SmallNote("试用会响铃，可直接结束且不计入记录。正式闹钟须扫码或 NFC 验证；应急退出需等待 60 秒，再持续长按 5 秒，记为未验证。")
+        SmallNote("试用会响铃，可直接结束且不计入记录。工作日正式闹钟在扫码或 NFC 验证前持续响铃。紧急关闭仅接受当前账号邮箱收到的本次二维码，退出记为未验证。")
     }
     if(category=="数据与更新") UpdateCard(a)
     if(category=="数据与更新") Sheet {

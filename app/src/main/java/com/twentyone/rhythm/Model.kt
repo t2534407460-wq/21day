@@ -55,10 +55,11 @@ enum class WakePhase { IDLE, RINGING, WALK, SECOND_WAIT, SECOND_READY, COMPLETE,
 data class WakeSession(
     val day: String = "", val phase: WakePhase = WakePhase.IDLE, val dueAt: Long = 0,
     val attempts: Int = 0, val firstAt: Long = 0, val completedAt: Long = 0,
-    val test: Boolean = false
+    val test: Boolean = false, val id: String = ""
 ) {
     val active get() = phase in setOf(WakePhase.RINGING, WakePhase.WALK, WakePhase.SECOND_WAIT, WakePhase.SECOND_READY)
-    fun begin(now: Long): WakeSession = if (phase in setOf(WakePhase.RINGING, WakePhase.SECOND_READY)) copy(phase = WakePhase.WALK, dueAt = now + 180_000) else this
+    val ringing get() = active && phase!=WakePhase.SECOND_WAIT && (!test || phase!=WakePhase.WALK)
+    fun begin(now: Long): WakeSession = if (test && phase in setOf(WakePhase.RINGING, WakePhase.SECOND_READY)) copy(phase = WakePhase.WALK, dueAt = now + 180_000) else this
     fun verify(now: Long, rules: Rules): WakeSession {
         if (!active || (phase == WakePhase.SECOND_WAIT && now < dueAt)) return this
         return if (firstAt == 0L && rules.secondCheck) copy(phase = WakePhase.SECOND_WAIT, firstAt = now, dueAt = now + rules.secondDelay * 60_000L)
@@ -67,8 +68,8 @@ data class WakeSession(
     fun retry(now: Long): WakeSession {
         if (!active) return this
         if (phase == WakePhase.SECOND_WAIT && now >= dueAt) return copy(phase = WakePhase.SECOND_READY, dueAt = now + 60_000)
-        return if (attempts >= 3) copy(phase = WakePhase.TIMED_OUT, dueAt = 0)
-        else copy(phase = if (firstAt > 0) WakePhase.SECOND_READY else WakePhase.RINGING, attempts = attempts + 1, dueAt = now + 60_000)
+        return if (test && attempts >= 3) copy(phase = WakePhase.TIMED_OUT, dueAt = 0)
+        else copy(phase = if (firstAt > 0) WakePhase.SECOND_READY else WakePhase.RINGING, attempts = (attempts.toLong()+1).coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), dueAt = now + 60_000)
     }
 }
 data class DayLog(val day: String, val status: String = "未记录", val bed: String = "", val rise: String = "", val energy: String = "", val reason: String = "", val note: String = "", val verifiedAt: Long = 0,

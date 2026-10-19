@@ -62,9 +62,9 @@ class WakeActivity:ComponentActivity() {
                 Text(if(wake.phase==WakePhase.SECOND_WAIT)"先洗漱、喝水。到时间后，再扫一次码或触碰标签。"else "拿起手机，到洗漱区扫描起床码，或触碰已绑定的 NFC 标签。",fontSize=17.sp)
                 val seconds=((wake.dueAt-System.currentTimeMillis())/1000).coerceAtLeast(0)
                 if(wake.phase==WakePhase.SECOND_WAIT) LargeNumber("${seconds/60}:${(seconds%60).toString().padStart(2,'0')}",size=34)
-                else SmallNote("提醒 ${wake.attempts} / 3 · 完成验证前，不会直接记为已起床。")
+                else SmallNote(if(wake.test) "提醒 ${wake.attempts} / 3 · 试用不计入记录。" else "扫码或 NFC 验证前持续响铃，不会因超时自动关闭。")
             }
-            if(wake.phase==WakePhase.RINGING || wake.phase==WakePhase.SECOND_READY) Primary("开始起床 · 安静验证 3 分钟"){Alarms.begin(a)}
+            if(wake.test && (wake.phase==WakePhase.RINGING || wake.phase==WakePhase.SECOND_READY)) Primary("开始起床 · 安静验证 3 分钟"){Alarms.begin(a)}
             Primary("扫描洗漱区的起床码",enabled=wake.phase!=WakePhase.SECOND_WAIT || System.currentTimeMillis()>=wake.dueAt){
                 scan.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt("扫描放在洗漱区的廿一起床码").setBeepEnabled(false).setOrientationLocked(true).setCaptureActivity(ScannerActivity::class.java))
             }

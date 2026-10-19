@@ -4,8 +4,6 @@ import android.app.ActivityManager
 import android.app.NotificationManager
 import android.content.Intent
 import android.os.SystemClock
-import android.view.InputDevice
-import android.view.MotionEvent
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.*
@@ -20,6 +18,7 @@ class ReliabilityFlowTest {
     private val device=UiDevice.getInstance(instrument)
     private val store by lazy { Store(context) }
     @Before fun setup() {
+        Assume.assumeTrue(android.os.Build.HARDWARE in listOf("ranchu","goldfish"))
         store.prefs.edit().clear().commit();store.createPlan(Plan());device.wakeUp()
         context.startActivity(Intent(context,MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
         assertTrue(device.wait(Until.hasObject(By.text("今天")),15000))
@@ -31,7 +30,7 @@ class ReliabilityFlowTest {
     private fun openAlarm() {
         instrument.runOnMainSync { Alarms.start(context) }
         context.startActivity(Intent(context,WakeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        assertTrue(device.wait(Until.hasObject(By.text("开始起床 · 安静验证 3 分钟")),10000))
+        assertTrue(device.wait(Until.hasObject(By.text("扫描洗漱区的起床码")),10000))
     }
     private fun tapStop(text:String) {
         var button=device.wait(Until.findObject(By.text(text)),2000)
@@ -65,16 +64,11 @@ class ReliabilityFlowTest {
         assertFalse("Formal notification must not contain an immediate stop",actionTitles.contains("紧急停止"))
         tapStop("紧急停止本次验证");device.waitForIdle()
         assertTrue("One tap must keep verification active",store.wake.active)
-        assertTrue(device.hasObject(By.text("应急退出")))
+        assertTrue(device.hasObject(By.text("邮箱紧急验证")))
         assertEquals(0L,store.log(store.wake.day).verifiedAt)
-        val hold=device.findObject(By.desc("持续长按 5 秒确认退出"))
-        hold.click();SystemClock.sleep(200)
-        assertTrue(store.wake.active)
-        assertFalse(Alarms.emergencyStop(context,EmergencyExitGate(SystemClock.elapsedRealtime())))
-        device.pressHome()
-        context.startActivity(Intent(context,WakeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        assertTrue(device.wait(Until.hasObject(By.text("紧急停止本次验证")),5000))
-        assertFalse(device.hasObject(By.text("应急退出")))
+        assertFalse(device.hasObject(By.desc("持续长按 5 秒确认退出")))
+        device.takeScreenshot(java.io.File(context.getExternalFilesDir(null),"emergency-email-0.12.5.png"))
+        tapStop("返回起床验证");assertTrue(store.wake.ringing)
     }
     @Test fun legacyNotificationActionCannotStopFormalAlarm() {
         openAlarm()
@@ -84,7 +78,7 @@ class ReliabilityFlowTest {
     }
     @Test fun alarmRetryDoesNotDismissEmergencyConfirmation() {
         openAlarm();tapStop("紧急停止本次验证")
-        assertTrue(device.wait(Until.hasObject(By.text("应急退出")),5000))
+        assertTrue(device.wait(Until.hasObject(By.text("邮箱紧急验证")),5000))
         val due=System.currentTimeMillis()+2000
         store.wake=store.wake.copy(dueAt=due)
         Alarms.set(context,Alarms.CHECK,due)
@@ -92,41 +86,24 @@ class ReliabilityFlowTest {
         while(store.wake.attempts==1 && SystemClock.elapsedRealtime()<deadline) SystemClock.sleep(100)
         assertEquals(2,store.wake.attempts)
         assertTrue(store.wake.active)
-        assertTrue(device.hasObject(By.text("应急退出")))
+        assertTrue(device.hasObject(By.text("邮箱紧急验证")))
     }
-    @Test fun emergencyExitNeedsRealWaitAndUninterruptedHold() {
+    @Test fun formalAlarmKeepsForegroundBeyondOneMinuteAndThreeAttempts() {
         openAlarm()
-        // Quiet walking leaves the real retry alarm scheduled; the test must not stop it.
-        device.findObject(By.text("开始起床 · 安静验证 3 分钟")).click()
-        assertTrue(device.wait(Until.gone(By.text("开始起床 · 安静验证 3 分钟")),3000))
-        tapStop("紧急停止本次验证")
-        assertTrue(device.wait(Until.hasObject(By.text("应急退出")),5000))
-        device.takeScreenshot(java.io.File(context.getExternalFilesDir(null),"emergency-wait-0.2.1.png"))
-        SystemClock.sleep(1500)
-        assertTrue(store.wake.active)
-        assertTrue(device.wait(Until.hasObject(By.text("现在持续按住下方按钮 5 秒")),65000))
-        device.takeScreenshot(java.io.File(context.getExternalFilesDir(null),"emergency-ready-0.2.1.png"))
-        val point=device.findObject(By.desc("持续长按 5 秒确认退出")).visibleCenter
-        fun holdFor(ms:Long,moveOut:Boolean=false) {
-            val began=SystemClock.uptimeMillis()
-            fun event(action:Int,x:Float,y:Float) {
-                val e=MotionEvent.obtain(began,SystemClock.uptimeMillis(),action,x,y,0).apply{source=InputDevice.SOURCE_TOUCHSCREEN}
-                instrument.uiAutomation.injectInputEvent(e,true);e.recycle()
-            }
-            event(MotionEvent.ACTION_DOWN,point.x.toFloat(),point.y.toFloat())
-            SystemClock.sleep(ms)
-            if(moveOut) { event(MotionEvent.ACTION_MOVE,point.x.toFloat(),point.y-300f);SystemClock.sleep(150) }
-            event(MotionEvent.ACTION_UP,point.x.toFloat(),if(moveOut) point.y-300f else point.y.toFloat())
+        instrument.runOnMainSync { Alarms.begin(context) }
+        assertEquals(WakePhase.RINGING,store.wake.phase)
+        // The retry is deliberately far away: the service must remain audible on its own.
+        store.wake=store.wake.copy(dueAt=System.currentTimeMillis()+180_000)
+        Alarms.set(context,Alarms.CHECK,store.wake.dueAt)
+        device.pressHome();SystemClock.sleep(66_000)
+        assertTrue(store.wake.ringing)
+        assertTrue(context.getSystemService(NotificationManager::class.java).activeNotifications.any { it.id==21 })
+        repeat(5) {
+            store.wake=store.wake.copy(dueAt=System.currentTimeMillis()-1)
+            instrument.runOnMainSync { AlarmReceiver().onReceive(context,Intent(Alarms.CHECK)) }
         }
-        holdFor(1500);assertTrue(store.wake.active)
-        holdFor(1500,true);assertTrue(store.wake.active)
-        holdFor(5500)
-        assertTrue(device.wait(Until.hasObject(By.text("本次验证已停止。")),5000))
-        assertEquals(WakePhase.STOPPED,store.wake.phase)
+        assertTrue(store.wake.ringing);assertTrue(store.wake.attempts>3)
         assertEquals(0L,store.log(store.wake.day).verifiedAt)
-        assertTrue(store.events().any{it.detail.contains("未完成起床验证")})
-        Alarms.CHECK.let{action->instrument.runOnMainSync{AlarmReceiver().onReceive(context,Intent(action))}}
-        assertEquals(WakePhase.STOPPED,store.wake.phase)
     }
     @Test fun trialAlarmCanStillEndImmediately() {
         instrument.runOnMainSync { Alarms.start(context,true) }

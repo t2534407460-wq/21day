@@ -36,6 +36,35 @@ class ReviewNavigationTest {
         c.startActivity(Intent(c,MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
         tap("21 天")
     }
+    @Test fun reportClockDoesNotReadDatabaseOrDecodeHistoryOnUiThread() {
+        val start=LocalDate.now().minusDays(24)
+        val habits=(1..80).map { Habit(name="阅读$it",start=start,rules=listOf(HabitRule(start))) }
+        val entries=habits.flatMap { h -> h.dates().map { HabitEntry(h.id,it,1) } }
+        Store(c).prefs.edit().putString("habits",HabitStore.encode(habits,entries).toString()).commit()
+        val store=ReviewStore(c);store.settings.edit().putString("since",start.toString()).commit()
+        val spec=store.specs(c).last { it.kind=="week" }
+        store.save(spec.id,ReviewReport("done",answer="后台加载的周报告"))
+        c.startActivity(Intent(c,ReviewActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+        assertTrue(device.wait(Until.hasObject(By.text("变化")),15000))
+        val reads=java.util.concurrent.CopyOnWriteArrayList<String>()
+        var original:android.os.StrictMode.ThreadPolicy?=null
+        instrumentation.runOnMainSync {
+            val activity=ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED).first() as ComponentActivity
+            activity.setContent { RhythmTheme { ReviewScreen(activity,initialSubject=spec.subject,showNavigation=false) } }
+        }
+        assertTrue(device.wait(Until.hasObject(By.text("后台加载的周报告")),7000))
+        instrumentation.runOnMainSync {
+            original=android.os.StrictMode.getThreadPolicy()
+            android.os.StrictMode.setThreadPolicy(android.os.StrictMode.ThreadPolicy.Builder().detectDiskReads()
+                .penaltyListener(java.util.concurrent.Executor { it.run() }) { violation ->
+                    if(violation.stackTrace.any { it.className.startsWith("com.twentyone.rhythm.ReviewActivityKt") }) reads.add(violation.toString())
+                }.build())
+        }
+        try {
+            android.os.SystemClock.sleep(2200)
+            assertTrue("报告显示与时钟刷新不得在主线程读取数据库：${reads.size}",reads.isEmpty())
+        } finally { instrumentation.runOnMainSync { android.os.StrictMode.setThreadPolicy(original!!) } }
+    }
     @Test fun reusedEmbeddedReviewFollowsParentSelectionInsteadOfRememberedWeek() {
         val start=LocalDate.now().minusDays(24)
         val h=Habit(name="阅读",start=start,rules=listOf(HabitRule(start)))
@@ -70,8 +99,8 @@ class ReviewNavigationTest {
     @Test fun unfinishedCyclesSwitchRepeatedlyWithoutLosingContentOrNavigation() {
         val today=LocalDate.now();val start=today.minusDays(3)
         Store(c).createPlan(Plan(start))
-        val habits=listOf("阅读","运动","工作").map { name ->
-            Habit(name=name,start=start,mode=HabitMode.AT_LEAST,unit="分钟",rules=listOf(HabitRule(start,target=20)))
+        val habits=listOf("阅读","运动","工作").mapIndexed { index,name ->
+            Habit(id=java.util.UUID(0,index+1L).toString(),name=name,start=start,mode=HabitMode.AT_LEAST,unit="分钟",rules=listOf(HabitRule(start,target=20)))
         }
         habits.forEach { HabitStore(c).save(it,start);HabitStore(c).record(HabitEntry(it.id,today,10)) }
         val before=Store(c).export();launch()

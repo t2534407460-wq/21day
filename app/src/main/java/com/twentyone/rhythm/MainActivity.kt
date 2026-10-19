@@ -43,9 +43,10 @@ class MainActivity : ComponentActivity() {
         if(savedInstanceState==null) { if(intent.action=="coach") coachRequest++;if(intent.action=="habits") habitRequest++ }
         if(intent.action=="bedtime_record") bedtimeRequest++
         if(savedInstanceState==null && intent.action=="ai_settings") { settingsTarget="AI 助手";settingsRequest++ }
+        if(savedInstanceState==null && intent.action=="account_settings") { settingsTarget="账号";settingsRequest++ }
         setContent { RhythmTheme { AppRoot(this) } }
     }
-    override fun onNewIntent(intent:android.content.Intent) { super.onNewIntent(intent);setIntent(intent);if(intent.action=="coach") coachRequest++;if(intent.action=="habits") habitRequest++;if(intent.action=="bedtime_record") bedtimeRequest++;if(intent.action=="ai_settings") { settingsTarget="AI 助手";settingsRequest++ } }
+    override fun onNewIntent(intent:android.content.Intent) { super.onNewIntent(intent);setIntent(intent);if(intent.action=="coach") coachRequest++;if(intent.action=="habits") habitRequest++;if(intent.action=="bedtime_record") bedtimeRequest++;if(intent.action=="ai_settings") { settingsTarget="AI 助手";settingsRequest++ };if(intent.action=="account_settings") {settingsTarget="账号";settingsRequest++} }
     override fun onResume() {
         super.onResume();permissionRevision++;Alarms.schedule(this)
         NfcAdapter.getDefaultAdapter(this)?.enableReaderMode(this,{ tag -> val id=tag.id.joinToString(""){"%02X".format(it)}; runOnUiThread { nfcListener?.invoke(id) } },NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_NFC_B or NfcAdapter.FLAG_READER_NFC_F or NfcAdapter.FLAG_READER_NFC_V or NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK,null)
@@ -98,9 +99,9 @@ class MainActivity : ComponentActivity() {
                     Tab(selected=journeySection==index,onClick={journeySection=index},text={Text(label)})
                 }
             }
-            if(tab==1 && journeySection>0) pageState.SaveableStateProvider("reviews-$journeySection") {
+            if(tab==1 && journeySection>0) key(journeySection) { pageState.SaveableStateProvider("reviews-$journeySection") {
                 ReviewScreen(activity,initialTab=if(journeySection==1) "week" else "cycle",showNavigation=false)
-            } else pageState.SaveableStateProvider(if(tab==1) "journey" else "main") {
+            } } else pageState.SaveableStateProvider(if(tab==1) "journey" else "main") {
                 Column(Modifier.fillMaxSize().verticalScroll(scrollState).padding(horizontal=22.dp).padding(top=20.dp,bottom=28.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
                     when(tab) {
                         0,1->if(p==null) {

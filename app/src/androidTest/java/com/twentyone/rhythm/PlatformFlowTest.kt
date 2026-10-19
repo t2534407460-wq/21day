@@ -38,16 +38,16 @@ class PlatformFlowTest {
         store.createPlan(Plan(LocalDate.now()))
         device.pressHome();device.sleep()
         Alarms.set(context,Alarms.WAKE,System.currentTimeMillis()+2500)
-        val shown=device.wait(Until.hasObject(By.text("开始起床 · 安静验证 3 分钟")),20000)
+        val shown=device.wait(Until.hasObject(By.text("扫描洗漱区的起床码")),20000)
         if(!shown) {
             device.takeScreenshot(java.io.File(context.getExternalFilesDir(null),"alarm-failure.png"))
             val hierarchy=java.io.ByteArrayOutputStream();device.dumpWindowHierarchy(hierarchy)
             fail("Alarm activity missing; phase=${store.wake.phase}, screenOn=${device.isScreenOn}; UI=$hierarchy")
         }
         assertTrue(store.wake.active)
-        device.findObject(By.text("开始起床 · 安静验证 3 分钟")).click()
-        assertTrue(device.wait(Until.gone(By.text("开始起床 · 安静验证 3 分钟")),3000))
-        assertEquals(WakePhase.WALK,store.wake.phase)
+        assertFalse(device.hasObject(By.text("开始起床 · 安静验证 3 分钟")))
+        instrumentation.runOnMainSync { Alarms.begin(context) }
+        assertEquals(WakePhase.RINGING,store.wake.phase)
         instrumentVerify()
         assertEquals(WakePhase.SECOND_WAIT,store.wake.phase)
         assertFalse(Alarms.verify(context))

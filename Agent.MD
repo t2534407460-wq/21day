@@ -17,12 +17,14 @@
 7. 更新“最近维护”及近期登记，使用简短的需求与结论摘要。近期登记过长时，可将详细经过归入关联 Debug，并保留日期、主题和链接；不能因精简删除未完成事项或已确认规则。
 8. 这些规则在后续处理本项目对话时执行，不代表脱离对话自动运行后台写文档任务。纯文档维护不重建、不递增版本、不发布 APK；用户当前要求暂停修改或限制范围时优先遵从。
 
-最近维护：2026-10-07；资料状态：**已修改待测试（待用户审阅）**。
+最近维护：2026-10-19；资料状态：**已修改待测试（待用户审阅）**。
 
 ### 近期对话登记
 
 | 日期 | 用户要求 / 反馈 | 当前结论与进展 | 依据 |
 | --- | --- | --- | --- |
+| 2026-10-19 | 周/21天总结仍偶发切换卡住；工作日起床必须扫码/NFC、持续响铃，紧急退出只接受邮箱二维码 | 0.12.5/code25：总结后台读取/统计并隔离页面状态；正式闹钟移除55秒停铃、3轮上限和安静按钮；邮箱一次性二维码绑定账号/设备/任务，替代旧等待长按。身份服务已备份部署；用户更新SMTP后认证及正式模板测试邮件被SMTP接受。验证与发布结果见本轮记录 | [总结原记录续篇](<E:/Obsidian Vault/CodexDebug/21day/2026-10-07-21天与变化页签合并.md>)；[持续响铃与邮箱验证](<E:/Obsidian Vault/CodexDebug/21day/2026-10-19-工作日起床持续响铃与邮箱紧急验证.md>) |
+| 2026-10-19 | 询问SMTP授权码；确认已更新并要求复测、继续发布；提供实际收件截图 | 授权码由发件人网易生成，只配置在服务器，收件人不需提交授权码。更新后认证通过，正式模板向发件邮箱自身发送测试邮件，用户截图确认收到且PNG正常显示；测试码无效。57项JVM/31项Android/公共23项通过，实机任务仍待验收 | [本轮记录](<E:/Obsidian Vault/CodexDebug/21day/2026-10-19-工作日起床持续响铃与邮箱紧急验证.md>) |
 | 2026-10-07 | 切21天总结卡顿/卡死，只能点其他页签返回 | 用户实机反馈失败；用户确认0.12.3且顶部已选21天、正文仍是周总结；复用组件测试已在旧0.12.3复现父cycle/正文week；0.12.4/code24正文跟随父选择、独立页保留自身状态；JVM59/Android9及0.12.3覆盖升级通过；0.12.4已公开并核对latest/实际下载hash，源码701f9ad，待实机复测 | [原记录续篇](<E:/Obsidian Vault/CodexDebug/21day/2026-10-07-21天与变化页签合并.md>) |
 | 2026-10-07 | 6个主页签太多，合并21天与变化 | 底部改5项，21天内作息进度/周总结/21天总结；保留助手独立入口、旧记录与报告。0.12.3/code23已发布并核对latest/实际下载hash，源码a2e074e；JVM59/分批Android13及0.12.2覆盖升级通过，实机待验收 | [本轮记录](<E:/Obsidian Vault/CodexDebug/21day/2026-10-07-21天与变化页签合并.md>) |
 | 2026-10-07 | 习惯一三五6点改每天8点，仍显示/提醒旧安排 | 0.12.2/code22已发布并核对latest/实际下载hash；频率/时间保存即同步，历史/今日目标和已记/计时归属保留。JVM59/分批Android27及0.12.1覆盖升级通过，源码eeca130，实机待测 | [本轮记录](<E:/Obsidian Vault/CodexDebug/21day/2026-10-07-习惯星期与提醒同步修改.md>) |
@@ -83,7 +85,7 @@
 - 0.9.0首次升级按本轮明确要求将休息日启用并设为02:00—10:00；保留普通作息、特殊日期及待生效时刻，标记rest_schedule_2026后不反复覆盖用户修改。
 - 作息计划日表示“一晚＋次晨”：00:00—11:59的睡前时间落在次日，记录归前一晚；10月4日02:00睡、10:00起属于10月3日晚间。首页、提醒、拦截、锁屏和21天共用此边界。历史日志不搬移或猜测修正。
 - 已进入夜间限制后修改规则保留原“延后生效”机制，不能为修正提醒时间而立即解除正在执行的限制。普通未受覆盖的01:00→02:00调整，对应下一次提醒应为01:45。
-- 保留真实二维码/NFC验证、二次确认设置及正常作息限制。正式闹钟应急退出需等待60秒再连续长按5秒；试用可直接结束。通用习惯打卡不影响这些状态。
+- 2026-10-19现行要求：工作日正式起床闹钟在真实二维码/NFC验证前持续响铃，不受55秒静音或三轮上限影响，也不能点按钮进入安静步行。第一次真实验证后保留二次确认等待，第二次开始仍持续响铃。紧急退出只接受当前登录账号已验证邮箱收到的本机、本次任务一次性二维码（10分钟有效），不写入已起床；旧60秒等待＋长按5秒方式被本次新要求替代。发送/验证失败保持任务和响铃。试用可直接结束、休息日自然醒、正常作息限制和通用习惯规则继续保留。
 
 ### 通用习惯与今日卡组
 
@@ -157,7 +159,7 @@
 | 页面导航与全局样式 | `MainActivity.kt`、`Theme.kt`、`SettingsScreen.kt` |
 | 作息数据、规则生效、备份 | `Model.kt`（Rules/Schedule/DayLog）、`Store.kt` |
 | 睡前问答、日期配对、锁屏 | `RecordFlow.kt`、`OrbSelection.kt`、`JourneyScreen.kt`、`BedtimeSchedule.kt`、`BedtimeLock.kt`、`BedtimeReminders.kt`、`RestCalendar.kt` |
-| 闹钟、验证、夜间拦截 | `Platform.kt`（Alarms/AlarmReceiver/RescheduleReceiver/Notifications）、`WakeActivity.kt`、`NightAccessibilityService.kt`、`EmergencyExitGate.kt`、`EmergencyExitDialog.kt` |
+| 闹钟、验证、夜间拦截 | `Platform.kt`（Alarms/AlarmReceiver/RescheduleReceiver/Notifications）、`WakeActivity.kt`、`NightAccessibilityService.kt`、`EmergencyExitDialog.kt`、`ProjectAccount.kt`（邮箱紧急验证） |
 | 习惯类型、时段/计数、规则历史 | `Habit.kt`、`HabitStore.kt`（startTimer/finishTimer/count/confirmDay）、`HabitReminders.kt` |
 | 叠纸卡、长按与习惯编辑 | `HabitDeck.kt`（HabitAction/HoldHabitButton）、`HabitDrawer.kt`、`HabitWidgets.kt`、`WidgetDrawerActivity.kt`、`HabitScreen.kt` |
 | 云端、聊天与确认补记 | `CloudCoach.kt`、`CoachActivity.kt`、`CoachChat.kt`、`CoachFacts.kt`、`CoachDraft.kt`、`AiSettings.kt`、`RecordHistory.kt`、`RecordHistoryDialog.kt` |

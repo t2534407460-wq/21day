@@ -54,10 +54,11 @@ object ProjectAccount {
         return prefs.getString("id",null) ?: UUID.randomUUID().toString().also { check(prefs.edit().putString("id",it).commit()) }
     }
     internal fun userId(c:Context):String?=read(c,"session")?.getString("userId")
-    private fun post(path:String,data:JSONObject):JSONObject? {
+    private fun post(path:String,data:JSONObject,token:String?=null):JSONObject? {
         val connection=URL(endpoint+path).openConnection() as HttpsURLConnection
         connection.instanceFollowRedirects=false;connection.connectTimeout=15000;connection.readTimeout=30000
         connection.requestMethod="POST";connection.doOutput=true;connection.setRequestProperty("Content-Type","application/json; charset=utf-8")
+        if(token!=null)connection.setRequestProperty("Authorization","Bearer $token")
         try {
             connection.outputStream.use { it.write(data.toString().toByteArray(Charsets.UTF_8)) }
             val status=connection.responseCode
@@ -106,4 +107,19 @@ object ProjectAccount {
         read(c,"session")?.let { post("sessions/revoke",JSONObject().put("refreshToken",it.getString("refreshToken"))) }
         file(c,"session").delete()
     } }
+    suspend fun requestWakeRecovery(c:Context):AccountChallenge {
+        val s=Store(c);var wake=s.wake
+        check(wake.active && !wake.test) { "当前没有正式起床任务。" }
+        if(wake.id.isBlank()) { wake=wake.copy(id=UUID.randomUUID().toString());s.wake=wake }
+        val id=wake.id;val token=accessToken(c)
+        return withContext(Dispatchers.IO) {
+            val result=post("wake-recovery/request",JSONObject().put("deviceId",device(c)).put("sessionId",id),token) ?: error("验证邮件响应为空。")
+            AccountChallenge(result.getString("challengeId"),result.getString("expiresAt"))
+        }
+    }
+    internal suspend fun confirmWakeRecovery(c:Context,id:String,qr:String) {
+        require(qr.startsWith("rhythm://emergency/")) { "请选择邮箱收到的紧急验证二维码。" }
+        val token=accessToken(c)
+        withContext(Dispatchers.IO) { post("wake-recovery/confirm",JSONObject().put("deviceId",device(c)).put("sessionId",id).put("qr",qr),token) }
+    }
 }

@@ -107,9 +107,11 @@ object Alarms {
         Schedule.nextWindDown(p,s.rules,now)?.let { set(c,PREP,it.epoch()) }
         val w=s.wake
         if(w.active && w.dueAt>0) {
-            // Never ring an obsolete morning session after a later reboot.
-            if(w.day!=LocalDate.now().toString()) { s.wake=w.copy(phase=WakePhase.TIMED_OUT,dueAt=0); cancel(c,CHECK) }
-            else set(c,CHECK,maxOf(System.currentTimeMillis()+1500,w.dueAt))
+            if(w.test && w.day!=LocalDate.now().toString()) { s.wake=w.copy(phase=WakePhase.TIMED_OUT,dueAt=0); cancel(c,CHECK) }
+            else {
+                set(c,CHECK,maxOf(System.currentTimeMillis()+1500,w.dueAt))
+                if(w.ringing) ring(c)
+            }
         }
         RhythmWidget.refresh(c)
     }
@@ -117,7 +119,7 @@ object Alarms {
         if(!test && RestCalendar.isRest(LocalDate.now())) { clearRestWake(c);return }
         val s=Store(c); val now=System.currentTimeMillis()
         if(s.wake.active) return
-        s.wake=WakeSession(LocalDate.now().toString(),WakePhase.RINGING,now+60_000,1,test=test)
+        s.wake=WakeSession(LocalDate.now().toString(),WakePhase.RINGING,now+60_000,1,test=test,id=java.util.UUID.randomUUID().toString())
         ring(c)
     }
     fun ring(c: Context) {
@@ -131,7 +133,8 @@ object Alarms {
     }
     fun begin(c: Context) {
         if(clearRestWake(c)) return
-        val s=Store(c); s.wake=s.wake.begin(System.currentTimeMillis())
+        val s=Store(c);if(!s.wake.test) return
+        s.wake=s.wake.begin(System.currentTimeMillis())
         c.stopService(Intent(c,WakeAlarmService::class.java)); set(c,CHECK,s.wake.dueAt)
     }
     fun verify(c: Context): Boolean {
@@ -155,11 +158,15 @@ object Alarms {
         cancel(c,CHECK); c.stopService(Intent(c,WakeAlarmService::class.java))
         if(!test) s.event("结束起床验证",reason)
     }
-    fun emergencyStop(c:Context,gate:EmergencyExitGate):Boolean {
-        val w=Store(c).wake
-        if(!w.active || w.test || !gate.canExit(SystemClock.elapsedRealtime())) return false
-        stop(c,"应急退出：等待 60 秒并持续长按 5 秒；未完成起床验证")
-        return true
+    suspend fun emergencyStop(c:Context,qr:String):Boolean {
+        val before=Store(c).wake
+        if(!before.active || before.test || before.id.isBlank()) return false
+        ProjectAccount.confirmWakeRecovery(c,before.id,qr)
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+            val current=Store(c).wake
+            if(!current.active || current.test || current.id!=before.id) false
+            else { stop(c,"应急退出：已验证当前账号邮箱收到的本次二维码；未完成起床验证");true }
+        }
     }
 }
 class AlarmReceiver : BroadcastReceiver() {
@@ -212,7 +219,10 @@ class WakeAlarmService : Service() {
                 .setContentTitle("休息日自然醒").setSilent(true).build())
             Alarms.clearRestWake(this);stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();return START_NOT_STICKY
         }
-        if(!s.wake.active) { stopSelf(); return START_NOT_STICKY }
+        if(!s.wake.ringing) {
+            startForeground(21,NotificationCompat.Builder(this,Notifications.ALARM).setSmallIcon(R.drawable.ic_logo).setSilent(true).build())
+            stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();return START_NOT_STICKY
+        }
         // Old notifications can retain their PendingIntent across a package update.
         if(intent?.action=="stop" && s.wake.test) { Alarms.stop(this,"结束试用闹钟");stopSelf();return START_NOT_STICKY }
         val notification=NotificationCompat.Builder(this,Notifications.ALARM).setSmallIcon(R.drawable.ic_logo).setContentTitle(if(s.wake.firstAt>0) "再确认一次，开始新一天" else "早安，该起床了")
@@ -223,6 +233,7 @@ class WakeAlarmService : Service() {
             notification.addAction(0,"结束试用",stop)
         } else notification.addAction(0,"前往起床验证",Notifications.pending(this,true))
         startForeground(21,notification.build())
+        if(ringtone?.isPlaying==true) return if(s.wake.test) START_NOT_STICKY else START_STICKY
         handler.removeCallbacksAndMessages(null)
         ringtone?.stop()
         ringtone=RingtoneManager.getRingtone(this,RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM) ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION))?.apply {
@@ -233,12 +244,17 @@ class WakeAlarmService : Service() {
         val vibrator=getSystemService(Vibrator::class.java)
         vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0,400,600),0))
         lock?.let { if(it.isHeld) it.release() }
-        lock=getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"rhythm:wake").apply { acquire(65_000) }
-        handler.postDelayed({
-            ringtone?.stop(); vibrator.cancel(); stopSelf()
-            // AlarmManager owns retries, so closing the activity does not reset the sequence.
-        },55_000)
-        return START_NOT_STICKY
+        lock=getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"rhythm:wake").apply { acquire(10*60_000L) }
+        if(s.wake.test) handler.postDelayed({ ringtone?.stop();vibrator.cancel();stopSelf() },55_000)
+        else handler.postDelayed(object:Runnable {
+            override fun run() {
+                if(!Store(this@WakeAlarmService).wake.ringing || Alarms.clearRestWake(this@WakeAlarmService)) { stopSelf();return }
+                if(lock?.isHeld==true) lock?.release()
+                lock?.acquire(10*60_000L)
+                handler.postDelayed(this,30_000)
+            }
+        },30_000)
+        return if(s.wake.test) START_NOT_STICKY else START_STICKY
     }
     override fun onDestroy() { handler.removeCallbacksAndMessages(null); ringtone?.stop(); getSystemService(Vibrator::class.java).cancel(); lock?.let { if(it.isHeld) it.release() }; super.onDestroy() }
 }

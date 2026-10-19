@@ -51,8 +51,8 @@ class Store(private val context: Context) {
     }
     fun createPlan(value: Plan) { put("plan", JSONObject().put("start", value.start).put("action", value.action).put("goal", value.goal)) }
     var wake: WakeSession
-        get() = json("wake").let { WakeSession(it.optString("day"), runCatching { WakePhase.valueOf(it.optString("phase")) }.getOrDefault(WakePhase.IDLE), it.optLong("due"), it.optInt("attempts"), it.optLong("first"), it.optLong("complete"), it.optBoolean("test")) }
-        set(v) = put("wake", JSONObject().put("day", v.day).put("phase", v.phase.name).put("due", v.dueAt).put("attempts", v.attempts).put("first", v.firstAt).put("complete", v.completedAt).put("test", v.test))
+        get() = json("wake").let { WakeSession(it.optString("day"), runCatching { WakePhase.valueOf(it.optString("phase")) }.getOrDefault(WakePhase.IDLE), it.optLong("due"), it.optInt("attempts"), it.optLong("first"), it.optLong("complete"), it.optBoolean("test"),it.optString("id")) }
+        set(v) = put("wake", JSONObject().put("day", v.day).put("phase", v.phase.name).put("due", v.dueAt).put("attempts", v.attempts).put("first", v.firstAt).put("complete", v.completedAt).put("test", v.test).put("id",v.id))
     val passPackage get() = prefs.getString("pass_package", "")!!
     val passUntil get() = prefs.getLong("pass_until", 0)
     fun passesRemaining(date: LocalDate = LocalDate.now()): Int {
