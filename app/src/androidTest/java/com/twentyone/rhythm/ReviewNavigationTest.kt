@@ -42,7 +42,7 @@ class ReviewNavigationTest {
         val entries=habits.flatMap { h -> h.dates().map { HabitEntry(h.id,it,1) } }
         Store(c).prefs.edit().putString("habits",HabitStore.encode(habits,entries).toString()).commit()
         val store=ReviewStore(c);store.settings.edit().putString("since",start.toString()).commit()
-        val spec=store.specs(c).last { it.kind=="week" }
+        val spec=store.specs(c).last { it.kind=="week" && !it.due.isAfter(java.time.LocalDateTime.now()) }
         store.save(spec.id,ReviewReport("done",answer="后台加载的周报告"))
         c.startActivity(Intent(c,ReviewActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
         assertTrue(device.wait(Until.hasObject(By.text("变化")),15000))
@@ -71,7 +71,7 @@ class ReviewNavigationTest {
         HabitStore(c).save(h,start)
         val store=ReviewStore(c);store.settings.edit().putString("since",start.toString()).commit()
         val specs=store.specs(c)
-        store.save(specs.last { it.kind=="week" }.id,ReviewReport("done",answer="周报告原文"))
+        store.save(specs.last { it.kind=="week" && !it.due.isAfter(java.time.LocalDateTime.now()) }.id,ReviewReport("done",answer="周报告原文"))
         store.save(specs.first { it.kind=="cycle" }.id,ReviewReport("done",answer="周期报告原文"))
         launch()
         // Reuse the embedded content while its parent changes selection. A saved local
@@ -122,7 +122,7 @@ class ReviewNavigationTest {
         HabitStore(c).save(h,start)
         val store=ReviewStore(c);store.settings.edit().putString("since",start.toString()).commit()
         val specs=store.specs(c)
-        store.save(specs.last { it.kind=="week" }.id,ReviewReport("done",answer="周总结保留"))
+        store.save(specs.last { it.kind=="week" && !it.due.isAfter(java.time.LocalDateTime.now()) }.id,ReviewReport("done",answer="周总结保留"))
         store.save(specs.first { it.kind=="cycle" }.id,ReviewReport("done",answer=(1..80).joinToString("\n") { "第${it}段：按本期真实记录回顾进度，未记录不等于零。" }+"\n报告结尾"))
         launch();tap("21天总结")
         assertTrue(device.wait(Until.hasObject(By.text("这一轮的回顾")),3000))

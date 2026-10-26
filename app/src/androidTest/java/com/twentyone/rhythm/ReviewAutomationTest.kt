@@ -69,12 +69,24 @@ class ReviewAutomationTest {
         ReviewScheduler.schedule(c);assertEquals(job.extras.getString("id"),scheduler.getPendingJob(ReviewScheduler.JOB)?.extras?.getString("id"))
         reviews.settings.edit().putBoolean("cycle",false).commit();ReviewScheduler.schedule(c);assertNull(scheduler.getPendingJob(ReviewScheduler.JOB))
     }
-    @Test fun realJobServiceGeneratesDueReviewAndStopsAfterSuccess() {
+    @Test fun realJobServiceGeneratesDueReviewAndSchedulesNextCycle() {
         val spec=seed();reviews.settings.edit().putBoolean("cycle",true).commit();ReviewScheduler.schedule(c)
         UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).executeShellCommand("cmd jobscheduler run -f ${c.packageName} ${ReviewScheduler.JOB}")
         val until=System.currentTimeMillis()+20000
         while(reviews.get(spec.id)?.status!="done" && System.currentTimeMillis()<until) Thread.sleep(100)
         assertEquals("done",reviews.get(spec.id)?.status);assertEquals(1,requests.get())
-        ReviewScheduler.schedule(c);assertNull(scheduler.getPendingJob(ReviewScheduler.JOB))
+        ReviewScheduler.schedule(c)
+        val next=scheduler.getPendingJob(ReviewScheduler.JOB)!!
+        assertNotEquals(spec.id,next.extras.getString("id"));assertEquals(spec.from.plusDays(42).atStartOfDay().epoch(),next.extras.getLong("due"))
+    }
+    @Test fun successiveHabitAndSleepCyclesGenerateOnceAndKeepOldReports()=runBlocking {
+        val start=LocalDate.now().minusDays(44)
+        val h=Habit(name="持续阅读",start=start,mode=HabitMode.AT_LEAST,unit="分钟",rules=listOf(HabitRule(start,target=20)))
+        hs.save(h,start);hs.record(HabitEntry(h.id,start.plusDays(21),30,"PRIVATE-NOTE"));s.createPlan(Plan(start))
+        val cycles=reviews.specs(c).filter { it.kind=="cycle" && !it.due.isAfter(LocalDateTime.now()) }
+        assertEquals(4,cycles.size)
+        cycles.forEach { ReviewRunner.generate(c,it);ReviewRunner.generate(c,it) }
+        assertEquals(4,requests.get());assertTrue(cycles.all { reviews.get(it.id)?.status=="done" })
+        assertFalse(sent.contains("PRIVATE-NOTE"));assertTrue(cycles.map { it.id }.distinct().size==4)
     }
 }

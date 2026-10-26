@@ -22,7 +22,7 @@ public static class HabitEndpoints
             var cards=snapshot.Entities.Where(e=>e.EntityType=="habits" && !e.Deleted).Select(e=>
             {
                 var data=SyncMerge.Node(e.Data)!;var plan=data["plan"]!;var start=DateOnly.ParseExact(Day21Policy.Text(plan,"start"),"yyyy-MM-dd");
-                var inRound=string.CompareOrdinal(day,start.ToString("yyyy-MM-dd"))>=0 && string.CompareOrdinal(day,start.AddDays(20).ToString("yyyy-MM-dd"))<=0;
+                var inRound=string.CompareOrdinal(day,start.ToString("yyyy-MM-dd"))>=0;
                 var scheduled=inRound && Day21Policy.CanRecord(plan,day);
                 return new { sourceProject="21day",sourceId=e.EntityId,sourceRevision=e.Revision,day,name=Day21Policy.Text(plan,"name"),
                     unit=Day21Policy.Text(plan,"unit"),input=Day21Policy.Text(plan,"input"),scheduled,

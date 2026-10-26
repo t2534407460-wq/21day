@@ -13,7 +13,7 @@ SecretVault? vault=null;
 var vaultFile=builder.Configuration["Vault:MasterKeyFile"];
 if(!string.IsNullOrWhiteSpace(vaultFile)) {vault=new SecretVault(database,await File.ReadAllBytesAsync(vaultFile));await vault.InitializeAsync();}
 var app = builder.Build(); app.UseAuthentication(); app.UseAuthorization();
-app.MapGet("/health", () => Results.Ok(new { project = "21day", api = "v1", build = "0.2.0" }));
+app.MapGet("/health", () => Results.Ok(new { project = "21day", api = "v1", build = "0.2.1" }));
 app.MapProjectSync(store, "/21day-api/v1");
 app.MapHabits(store);
 app.MapVault(vault);

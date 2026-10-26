@@ -77,6 +77,8 @@ class BedtimeLockTest {
         assertFalse("到点即锁屏，无一小时宽限",device.isScreenOn)
         assertTrue(s.prefs.getStringSet("bedtime_locked_nights",emptySet())!!.contains(evening.toString()))
         assertTrue(c.getSystemService(android.app.NotificationManager::class.java).activeNotifications.any { it.id==26 })
+        val persisted=SystemClock.elapsedRealtime()+3000
+        while(s.events().none { it.kind=="睡前超时锁屏" } && SystemClock.elapsedRealtime()<persisted) SystemClock.sleep(50)
         val locked=s.events().single { it.kind=="睡前超时锁屏" }
         assertTrue("不能早锁",locked.time>=due.epoch());assertTrue("实际定时触发",locked.time-due.epoch()<10000)
     }

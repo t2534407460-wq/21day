@@ -23,8 +23,12 @@ data class Rules(
 }
 data class Plan(val start: LocalDate = LocalDate.now(), val action: String = "洗漱后，把手机放到固定充电处", val goal: String = "规律睡觉，清醒地开始每一天") {
     fun day(date: LocalDate) = java.time.temporal.ChronoUnit.DAYS.between(start, date).toInt() + 1
-    fun contains(date: LocalDate) = day(date) in 1..21
+    fun contains(date: LocalDate) = date>=start
+    fun cycleStart(date:LocalDate)=cycleStart(start,date)
+    fun datesFrom(date:LocalDate)=generateSequence(maxOf(start,date)) { it.plusDays(1) }
 }
+fun cycleStart(start:LocalDate,date:LocalDate)=start.plusDays(java.time.temporal.ChronoUnit.DAYS.between(start,date).coerceAtLeast(0)/21*21)
+fun datesBetween(from:LocalDate,to:LocalDate)=generateSequence(from) { it.plusDays(1) }.takeWhile { it<=to }.toList()
 data class NightWindow(val date: LocalDate, val start: LocalDateTime, val end: LocalDateTime)
 object Schedule {
     // A rules refresh at the wake boundary must not replace an undelivered alarm with tomorrow's.
@@ -39,12 +43,12 @@ object Schedule {
         return null
     }
     fun nextWake(plan: Plan, rules: Rules, now: LocalDateTime): LocalDateTime? =
-        (0L..21L).map { plan.start.plusDays(it) }.filterNot { RestCalendar.isRest(it) }.map { it.atStartOfDay().plusMinutes(rules.wakeTime(it).toLong()) }.firstOrNull { it.isAfter(now) }
+        plan.datesFrom(now.toLocalDate()).filterNot { RestCalendar.isRest(it) }.map { it.atStartOfDay().plusMinutes(rules.wakeTime(it).toLong()) }.firstOrNull { it.isAfter(now) }
     fun nextWindDown(plan: Plan, rules: Rules, now: LocalDateTime): LocalDateTime? =
-        (0L..20L).map { BedtimeSchedule.bedtime(plan.start.plusDays(it),rules).minusMinutes(15) }.firstOrNull { it.isAfter(now) }
+        plan.datesFrom(now.toLocalDate().minusDays(1)).map { BedtimeSchedule.bedtime(it,rules).minusMinutes(15) }.firstOrNull { it.isAfter(now) }
     // Recheck the effective rules at delivery; an old queued callback is not proof that a reminder is due.
     fun windDownBedtime(plan: Plan, rules: Rules, now: LocalDateTime): LocalDateTime? =
-        (0L..20L).map { plan.start.plusDays(it) }
+        listOf(now.toLocalDate().minusDays(1),now.toLocalDate()).filter { plan.contains(it) }
             .map { BedtimeSchedule.bedtime(it,rules) }
             .firstOrNull { !now.isBefore(it.minusMinutes(15)) && now.isBefore(it) }
     fun blocks(packageName: String, rules: Rules, night: NightWindow?, passPackage: String, passUntil: Long, now: Long) =

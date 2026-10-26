@@ -19,6 +19,9 @@ object BedtimeSchedule {
     fun deadline(date:LocalDate,rules:Rules)=bedtime(date,rules)
     fun morning(date:LocalDate,rules:Rules)=date.plusDays(1).atStartOfDay().plusMinutes(rules.wakeTime(date.plusDays(1)).toLong())
     fun closes(date:LocalDate,rules:Rules)=minOf(morning(date,rules),bedtime(date.plusDays(1),rules))
+    fun upcomingDays(plan:Plan,rules:Rules,now:LocalDateTime)=
+        (plan.datesFrom(now.toLocalDate().minusDays(1)).take(16).toList()+rules.exceptions.keys.map(LocalDate::parse)
+            .filter { plan.contains(it) && it>=now.toLocalDate().minusDays(1) }).distinct().sorted()
     // After midnight, finish the previous evening until its planned morning begins.
     fun recordDay(plan:Plan,rules:Rules,now:LocalDateTime):LocalDate? {
         val previous=now.toLocalDate().minusDays(1)
@@ -26,7 +29,7 @@ object BedtimeSchedule {
         return now.toLocalDate().takeIf { plan.contains(it) }
     }
     fun nextLockDay(plan:Plan,rules:Rules,logs:List<DayLog>,locked:Set<String>,now:LocalDateTime):LocalDate? =
-        (0L..20L).map { plan.start.plusDays(it) }.firstOrNull { date ->
+        upcomingDays(plan,rules,now).firstOrNull { date ->
             val log=logs.firstOrNull { it.day==date.toString() } ?: DayLog(date.toString())
             date.toString() !in locked && !checked(log) && deadline(date,rules).isBefore(closes(date,rules)) && now.isBefore(closes(date,rules))
         }

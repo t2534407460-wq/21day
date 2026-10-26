@@ -16,7 +16,7 @@ class BedtimeReminderTest {
     private val s=Store(c)
     private val manager=c.getSystemService(NotificationManager::class.java)
     @Before fun setup() {
-        s.prefs.edit().clear().commit();s.createPlan(Plan(LocalDate.now().minusDays(1)))
+        s.prefs.edit().clear().commit();s.createPlan(Plan(LocalDate.now()))
         Notifications.create(c);manager.cancelAll()
     }
     @After fun cleanup() {

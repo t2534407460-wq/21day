@@ -27,7 +27,7 @@ object BedtimeReminders {
     }
     fun nextDay(s:Store,now:LocalDateTime):LocalDate? {
         val p=s.plan ?: return null
-        return (0L..20L).map { p.start.plusDays(it) }.firstOrNull { day ->
+        return BedtimeSchedule.upcomingDays(p,s.rules,now).firstOrNull { day ->
             !BedtimeSchedule.checked(s.log(day.toString())) && token(day,s.rules) !in sent(s,"due") &&
                 BedtimeSchedule.bedtime(day,s.rules)<BedtimeSchedule.closes(day,s.rules) && now<BedtimeSchedule.closes(day,s.rules)
         }

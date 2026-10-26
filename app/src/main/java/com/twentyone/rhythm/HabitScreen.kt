@@ -46,7 +46,7 @@ private fun frequency(days:Set<Int>)=if(days.size==7) "每天" else "每周"+day
         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) { Eyebrow("SMALL STEPS / 21 DAYS");Heading("把想做的，变成日常。") }
         }
-        val active=habits.filter { !it.archived && it.end>=today }
+        val active=habits.filter { !it.archived }
         val due=active.filter { it.scheduled(today) }
         val recorded=due.count { h -> entries.any { it.habitId==h.id && it.date==today } }
         Sheet(color=Sage) {
@@ -81,19 +81,19 @@ private fun frequency(days:Set<Int>)=if(days.size==7) "每天" else "每周"+day
                     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
                         Column(Modifier.weight(1f).clickable { selected=h.id }) {
                             Text(h.name,fontSize=21.sp,fontWeight=FontWeight.Medium)
-                            SmallNote(if(h.archived) "已归档 · ${h.start.format(habitDate)} 开始" else if(today>h.end) "本轮结束 · 21 天" else if(today<h.start) "${h.start.format(habitDate)} 开始" else "第 ${h.day(today)} / 21 天 · ${frequency(h.rule(today).days)}")
+                            SmallNote(if(h.archived) "已归档 · ${h.start.format(habitDate)} 开始" else if(today<h.start) "${h.start.format(habitDate)} 开始" else "已进行 ${h.day(today)} 天 · ${frequency(h.rule(today).days)}")
                         }
                         IconButton(onClick={selected=h.id}) { Icon(Icons.Outlined.ChevronRight,"查看${h.name}") }
                     }
                     Text(h.goal(today),color=Moss)
-                    SmallNote(if(h.archived || today>h.end) "记录与趋势已保留" else if(!h.scheduled(today)) "今天无需打卡" else if(e==null) "尚未记录 · "+(h.rule(today).reminder?.let { "${timeText(it)} 提醒" } ?: "未设置提醒") else entrySummary(h,e))
+                    SmallNote(if(h.archived) "记录与趋势已保留" else if(!h.scheduled(today)) "今天无需打卡" else if(e==null) "尚未记录 · "+(h.rule(today).reminder?.let { "${timeText(it)} 提醒" } ?: "未设置提醒") else entrySummary(h,e))
                     if(!h.archived && h.scheduled(today)) OutlinedButton(onClick={record=h to today},modifier=Modifier.fillMaxWidth()) { Text(if(e==null) "记录${h.name}" else "修改${h.name}记录") }
                 }
             }
         }
     } else {
         TextButton(onClick={selected=null}) { Icon(Icons.AutoMirrored.Outlined.ArrowBack,null);Text("全部习惯") }
-        HabitDetail(current,entries,today,onRecord={record=current to it},onEdit={editing=current},onArchive={archive=current},onRenew={seed=current;create=true},onReview={a.startActivity(android.content.Intent(a,ReviewActivity::class.java).putExtra("subject",current.id).putExtra("tab",if(today>current.end) "cycle" else "week"))},action={
+        HabitDetail(current,entries,today,onRecord={record=current to it},onEdit={editing=current},onArchive={archive=current},onRenew={seed=current;create=true},onReview={a.startActivity(android.content.Intent(a,ReviewActivity::class.java).putExtra("subject",current.id).putExtra("tab",if(today>=current.start.plusDays(21)) "cycle" else "week"))},action={
             HabitAction(a,store,current,entries.find { it.habitId==current.id && it.date==today },clock(),onManual={record=current to today},onMessage={message=it})
         })
     }
@@ -119,17 +119,26 @@ private fun habitTemplate(name:String,today:LocalDate)=when(name) {
 private fun entrySummary(h:Habit,e:HabitEntry)=(if(h.mode==HabitMode.CHECK) if(e.value==1) "已完成" else "未完成" else "${e.value} ${h.unit}")+" · "+if(h.reached(e.date,e.value)) "达到当日目标" else "已记录，未达目标"
 
 @Composable private fun HabitDetail(h:Habit,entries:List<HabitEntry>,today:LocalDate,onRecord:(LocalDate)->Unit,onEdit:()->Unit,onArchive:()->Unit,onRenew:()->Unit,onReview:()->Unit,action:@Composable ()->Unit) {
-    val own=entries.filter { it.habitId==h.id };val stats=HabitAnalysis.stats(h,own,today)
+    val latest=h.cycleStart(today)
+    var period by rememberSaveable(h.id,latest.toString()) { mutableStateOf(latest.toString()) }
+    val cycle=LocalDate.parse(period);val end=cycle.plusDays(20)
+    val own=entries.filter { it.habitId==h.id };val stats=HabitAnalysis.stats(h,own,today,cycle,end)
     Heading(h.name)
-    SmallNote("${h.start} — ${h.end} · "+if(h.archived) "已归档" else if(today>h.end) "本轮结束" else if(today<h.start) "尚未开始" else "第 ${h.day(today)} / 21 天")
+    SmallNote("${h.start} 开始 · "+if(h.archived) "已归档" else if(today<h.start) "尚未开始" else "持续进行，每21天总结一次")
+    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
+        TextButton(onClick={period=cycle.minusDays(21).toString()},enabled=cycle>h.start) { Text("上一周期") }
+        Text("第 ${(h.day(cycle)-1)/21+1} 期",color=Moss)
+        TextButton(onClick={period=cycle.plusDays(21).toString()},enabled=cycle<latest) { Text("下一周期") }
+    }
+    SmallNote("$cycle — $end · 21天复盘周期")
     Sheet(color=Sage) {
         Text(h.goal(today),fontSize=22.sp,fontWeight=FontWeight.Medium)
         SmallNote(frequency(h.rule(today).days)+" · "+(h.rule(today).reminder?.let { "${timeText(it)} 提醒" } ?: "不提醒"))
         if(!h.archived) h.rules.firstOrNull { it.from>today }?.let { SmallNote("${it.from} 起：${h.goal(it.from)} · ${frequency(it.days)} · "+(it.reminder?.let { m->timeText(m) } ?: "不提醒")) }
         if(!h.archived) Column(Modifier.fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally) { action() }
         if(!h.archived && h.scheduled(today)) TextButton(onClick={onRecord(today)},modifier=Modifier.fillMaxWidth()) { Text(if(own.any { it.date==today }) "修改今日记录" else if(h.input==HabitInput.DAILY) "手动填写今日记录" else "手动填写今日总量") }
-        else SmallNote(if(h.archived || today>h.end) "这一轮记录已保留，可回顾后开始下一轮。" else "今天不在执行日期内。")
-        if(!h.archived && today<h.end) TextButton(onClick=onEdit) { Text("调整计划") }
+        else SmallNote(if(h.archived) "这一轮记录已保留，可回顾后开始下一轮。" else "今天不在执行日期内。")
+        if(!h.archived) TextButton(onClick=onEdit) { Text("调整计划") }
     }
     SettingLink("查看该习惯的 AI 复盘","每周与21天看板",onReview)
     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
@@ -140,7 +149,7 @@ private fun entrySummary(h:Habit,e:HabitEntry)=(if(h.mode==HabitMode.CHECK) if(e
     Sheet {
         Text("21 天记录",fontWeight=FontWeight.SemiBold)
         SmallNote("点日期记录或补记；数字为日期。✓ 达标，· 已记录未达标，— 休息，空白为未记录。")
-        h.dates().chunked(7).forEach { week -> Row(horizontalArrangement=Arrangement.spacedBy(4.dp)) {
+        h.dates(cycle,end).chunked(7).forEach { week -> Row(horizontalArrangement=Arrangement.spacedBy(4.dp)) {
             week.forEach { date -> val e=own.find { it.date==date };val due=h.scheduled(date);val reached=e!=null && h.reached(date,e.value)
                 Surface(onClick={onRecord(date)},enabled=(h.archived && e!=null) || (!h.archived && due && date<=today),shape=RoundedCornerShape(10.dp),color=if(reached) Sage else Color.Transparent,
                     modifier=Modifier.weight(1f).semantics { contentDescription="${h.name} $date "+if(e!=null) entrySummary(h,e) else if(!due) "休息" else "未记录" }) {
@@ -148,12 +157,12 @@ private fun entrySummary(h:Habit,e:HabitEntry)=(if(h.mode==HabitMode.CHECK) if(e
                 }
             }
         } }
-        if(h.archived) SmallNote("归档后仅供回顾，未开始的日期不计入计划日。")
+        if(h.archived) SmallNote("归档后仅供回顾，归档后的日期不计入计划日。")
     }
     Sheet {
         Text("每周趋势",fontWeight=FontWeight.SemiBold)
-        if(h.mode!=HabitMode.CHECK) HabitChart(h,own,today)
-        repeat(3) { i -> val first=h.start.plusDays(i*7L);val last=first.plusDays(6);val s=HabitAnalysis.stats(h,own,today,first,last)
+        if(h.mode!=HabitMode.CHECK) HabitChart(h,own,today,cycle)
+        repeat(3) { i -> val first=cycle.plusDays(i*7L);val last=first.plusDays(6);val s=HabitAnalysis.stats(h,own,today,first,last)
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
                 Column(Modifier.weight(1f)) { Text("第 ${i+1} 周",fontWeight=FontWeight.Medium);SmallNote("${first.format(habitDate)}—${last.format(habitDate)}") }
                 Column(horizontalAlignment=Alignment.End) { Text(if(first>today) "尚未开始" else "${s.reached} 达标 / ${s.recorded} 已记录",fontSize=14.sp);if(h.mode!=HabitMode.CHECK) SmallNote(s.average?.let { "记录日均 %.1f ${h.unit}".format(it) } ?: "暂无数值") }
@@ -171,12 +180,12 @@ private fun entrySummary(h:Habit,e:HabitEntry)=(if(h.mode==HabitMode.CHECK) if(e
             }
         }
     }
-    if(h.archived || today>h.end) Primary("开始新一轮",click=onRenew)
+    if(h.archived) Primary("开始新一轮",click=onRenew)
     else TextButton(onClick=onArchive) { Text("归档此计划",color=Muted) }
 }
 
-@Composable private fun HabitChart(h:Habit,entries:List<HabitEntry>,today:LocalDate) {
-    val dates=h.dates();val values=dates.map { date -> entries.find { it.date==date }?.value }
+@Composable private fun HabitChart(h:Habit,entries:List<HabitEntry>,today:LocalDate,cycle:LocalDate) {
+    val dates=h.dates(cycle,cycle.plusDays(20));val values=dates.map { date -> entries.find { it.date==date }?.value }
     val ceiling=maxOf(1,(values.filterNotNull()+dates.map { h.rule(it).target }).maxOrNull() ?: 1).toFloat()
     SmallNote("纵轴 0—${ceiling.toInt()} ${h.unit}")
     Canvas(Modifier.fillMaxWidth().height(110.dp).semantics { contentDescription="21天数值趋势，柱为实际记录，短线为当日目标，缺失不画柱" }) {
@@ -211,7 +220,7 @@ private fun entrySummary(h:Habit,e:HabitEntry)=(if(h.mode==HabitMode.CHECK) if(e
                     }
                     OutlinedTextField(name,{name=it.take(40)},label={Text("习惯名称")},singleLine=true,modifier=Modifier.fillMaxWidth())
                     if(original==null) {
-                        DateInput("开始日期 · 一轮21天",start,minDate=today){start=it}
+                        DateInput("开始日期 · 每21天总结",start,minDate=today){start=it}
                         Text(if(smoking) "戒烟方式" else "打卡方式",fontWeight=FontWeight.Medium)
                         Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                             val choices=if(smoking) listOf(HabitInput.DAILY to "断崖式戒烟",HabitInput.COUNT to "每日控量") else listOf(HabitInput.TIMER to "时段计时",HabitInput.COUNT to "次数打卡")

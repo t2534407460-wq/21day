@@ -13,27 +13,27 @@ class HabitStore(private val context:Context) {
     fun save(h:Habit,today:LocalDate=LocalDate.now()):Unit=ProjectPreferences.atomic(context) {
         require(h.valid()) { "请填写名称、有效目标和执行日期" }
         val all=habits();val old=all.find { it.id==h.id }
-        require(all.size<200 || old!=null) { "最多保存 200 轮计划，请先导出备份" }
+        require(all.size<200 || old!=null) { "最多保存 200 个习惯，请先导出备份" }
         if(old==null) require(h.start>=today && !h.archived && h.rules.size==1) { "新计划请从今天或之后开始" }
         else {
             require(!old.archived || h==old) { "已归档计划请开始新一轮" }
             require(h.archivedOn==null || h.archivedOn==today) { "归档日期应为今天" }
-            require(h.start==old.start && h.mode==old.mode && h.unit==old.unit && h.input==old.input && h.smoking==old.smoking) { "计量方式和开始日期在本轮中保持不变" }
+            require(h.start==old.start && h.mode==old.mode && h.unit==old.unit && h.input==old.input && h.smoking==old.smoking) { "计量方式和开始日期在创建后保持不变" }
             require(h.archivedOn==null || running(h.id)==0L) { "请先结束或取消本次计时，再归档" }
-            require(old.dates().filter { it<today }.all { old.rule(it)==h.rule(it) } &&
-                (today !in old.start..old.end || old.rule(today).target==h.rule(today).target)) { "过去的安排和今天的目标保持不变" }
+            require((old.rules.map { it.from }+h.rules.map { it.from }).filter { it<today }.distinct().all { old.rule(it)==h.rule(it) } &&
+                (today<old.start || old.rule(today).target==h.rule(today).target)) { "过去的安排和今天的目标保持不变" }
             require(entries().filter { it.habitId==h.id }.all { h.scheduled(it.date) } &&
                 (timers().optJSONObject(h.id)?.optString("day")?.let { h.scheduled(LocalDate.parse(it)) } ?: true)) { "已记录或正在计时的日期需要保留" }
         }
         write(if(old==null) all+h else all.map { if(it.id==h.id) h else it },entries())
-        if(old!=h) Store(context).event(if(old==null) "新建习惯" else if(h.archived) "归档习惯" else "调整习惯","${h.name} · ${h.start} 至 ${h.end} · ${h.goal(h.rules.last().from)}")
+        if(old!=h) Store(context).event(if(old==null) "新建习惯" else if(h.archived) "归档习惯" else "调整习惯","${h.name} · ${h.start} 开始 · 每21天复盘 · ${h.goal(h.rules.last().from)}")
     }
     fun record(entry:HabitEntry,today:LocalDate=LocalDate.now()):Unit=ProjectPreferences.atomic(context) {
         recordEntry(entry,today,if(entries().any { it.habitId==entry.habitId && it.date==entry.date }) "更正习惯记录" else "手填习惯记录")
     }
     private fun recordEntry(entry:HabitEntry,today:LocalDate,kind:String) {
         val all=habits();val h=all.first { it.id==entry.habitId }
-        require(!h.archived && h.scheduled(entry.date) && entry.date<=today) { "只能记录本轮已到日期的计划日" }
+        require(!h.archived && h.scheduled(entry.date) && entry.date<=today) { "只能记录已到日期的执行日" }
         require(validEntry(h,entry)) { "请填写有效数值，备注最多 300 字" }
         val list=entries().filterNot { it.habitId==entry.habitId && it.date==entry.date }+entry
         write(all,list)
@@ -102,7 +102,7 @@ class HabitStore(private val context:Context) {
             .put("sessions",JSONArray().also { sessions -> e.sessions.forEach { sessions.put(JSONObject().put("start",it.start).put("end",it.end)) } })) } })
         fun decode(root:JSONObject):Pair<List<Habit>,List<HabitEntry>> {
             val plans=root.getJSONArray("plans");val records=root.getJSONArray("entries")
-            require(plans.length()<=200 && records.length()<=4200) { "习惯备份条目过多" }
+            require(plans.length()<=200) { "习惯备份条目过多" }
             val all=(0 until plans.length()).map { i -> val j=plans.getJSONObject(i);val r=j.getJSONArray("rules")
                 Habit(j.getString("id"),j.getString("name"),LocalDate.parse(j.getString("start")),HabitMode.valueOf(j.getString("mode")),j.getString("unit"),
                     (0 until r.length()).map { k -> val rule=r.getJSONObject(k);val d=rule.getJSONArray("days")

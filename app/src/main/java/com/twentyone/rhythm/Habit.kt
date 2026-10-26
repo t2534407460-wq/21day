@@ -24,10 +24,11 @@ data class Habit(val id:String=UUID.randomUUID().toString(),val name:String,val 
     val visual:HabitVisual=legacyHabitVisual(name,smoking)) {
     val archived get()=archivedOn!=null
     val end get()=start.plusDays(20)
+    fun cycleStart(date:LocalDate)=cycleStart(start,minOf(date,archivedOn ?: date))
     fun day(date:LocalDate)=ChronoUnit.DAYS.between(start,date).toInt()+1
     fun rule(date:LocalDate)=rules.lastOrNull { !it.from.isAfter(date) } ?: rules.first()
-    fun scheduled(date:LocalDate)=date>=start && date<=end && (archivedOn==null || date<=archivedOn) && date.dayOfWeek.value in rule(date).days
-    fun dates()=(0L..20L).map { start.plusDays(it) }
+    fun scheduled(date:LocalDate)=date>=start && (archivedOn==null || date<=archivedOn) && date.dayOfWeek.value in rule(date).days
+    fun dates(from:LocalDate=start,to:LocalDate=end)=datesBetween(from,to)
     fun reached(date:LocalDate,value:Int)=when(mode) { HabitMode.CHECK->value==1;HabitMode.AT_LEAST->value>=rule(date).target;HabitMode.AT_MOST->value<=rule(date).target }
     fun goal(date:LocalDate)=when(mode) { HabitMode.CHECK->"完成一次";HabitMode.AT_LEAST->"至少 ${rule(date).target} $unit";HabitMode.AT_MOST->"不超过 ${rule(date).target} $unit" }
     fun revised(name:String,days:Set<Int>,target:Int,reminder:Int?,today:LocalDate,preserveToday:Boolean=false):Habit {
@@ -36,11 +37,11 @@ data class Habit(val id:String=UUID.randomUUID().toString(),val name:String,val 
             if(from>today) target else rule(today).target,reminder)
         val next=current.copy(from=maxOf(start,today.plusDays(1)),days=days,target=target)
         return copy(name=name,rules=rules.filter { it.from<from }+current+
-            if(next.from>from && next.from<=end && (next.days!=current.days || next.target!=current.target)) listOf(next) else emptyList())
+            if(next.from>from && (next.days!=current.days || next.target!=current.target)) listOf(next) else emptyList())
     }
     fun valid()=runCatching { UUID.fromString(id); true }.getOrDefault(false) && name.isNotBlank() && name.length<=40 && unit.isNotBlank() && unit.length<=8 &&
-        rules.isNotEmpty() && rules.size<=21 && rules.first().from==start && rules.map { it.from }==rules.map { it.from }.distinct().sorted() &&
-        rules.all { it.from in start..end && it.valid(mode) } &&
+        rules.isNotEmpty() && rules.first().from==start && rules.map { it.from }==rules.map { it.from }.distinct().sorted() &&
+        rules.all { it.from>=start && it.valid(mode) } &&
         (input!=HabitInput.TIMER || (unit=="分钟" && mode==HabitMode.AT_LEAST)) &&
         (input!=HabitInput.COUNT || mode!=HabitMode.CHECK) && (!smoking || unit=="支") &&
         (input!=HabitInput.DAILY || mode==HabitMode.CHECK || (smoking && mode==HabitMode.AT_MOST && rules.all { it.target==0 }))
@@ -50,15 +51,15 @@ data class HabitEntry(val habitId:String,val date:LocalDate,val value:Int,val no
     val sessions:List<HabitSession> = emptyList(),val remainderSeconds:Int=0)
 data class HabitStats(val scheduled:Int,val recorded:Int,val reached:Int,val missed:Int,val average:Double?)
 object HabitAnalysis {
-    fun stats(h:Habit,entries:List<HabitEntry>,today:LocalDate,from:LocalDate=h.start,to:LocalDate=h.end):HabitStats {
-        val dates=h.dates().filter { h.scheduled(it) && it<=today && it in from..to }
+    fun stats(h:Habit,entries:List<HabitEntry>,today:LocalDate,from:LocalDate=h.cycleStart(today),to:LocalDate=from.plusDays(20)):HabitStats {
+        val dates=h.dates(maxOf(h.start,from),minOf(today,to)).filter { h.scheduled(it) }
         val recorded=entries.filter { it.habitId==h.id && it.date in dates }
         return HabitStats(dates.size,recorded.size,recorded.count { h.reached(it.date,it.value) },dates.count { it<today && recorded.none { e->e.date==it } },
             recorded.takeIf { it.isNotEmpty() }?.map { it.value }?.average())
     }
     // One reminder for an unrecorded scheduled day. Missing entries never imply a zero value.
     fun nextReminder(habits:List<Habit>,entries:List<HabitEntry>,sent:Set<String>,now:LocalDateTime):LocalDateTime? = habits.filter { !it.archived }.flatMap { h ->
-        h.dates().mapNotNull { date ->
+        h.dates(maxOf(h.start,now.toLocalDate()),maxOf(h.start,now.toLocalDate(),h.rules.last().from).plusDays(7)).mapNotNull { date ->
             val minute=h.rule(date).reminder
             if(!h.scheduled(date) || minute==null || entries.any { it.habitId==h.id && it.date==date } || key(h.id,date) in sent) null
             else date.atStartOfDay().plusMinutes(minute.toLong()).takeIf { it.isAfter(now) }

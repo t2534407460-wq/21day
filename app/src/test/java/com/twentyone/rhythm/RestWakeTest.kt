@@ -22,9 +22,9 @@ class RestWakeTest {
         assertEquals(360,rules.wakeTime(LocalDate.parse("2026-10-04")))
         assertEquals(LocalDateTime.parse("2026-10-08T08:30"),Schedule.nextWake(p,rules,LocalDateTime.parse("2026-10-04T01:00")))
     }
-    @Test fun noAlarmBeyondPlanAndBedtimeIsUnchanged() {
+    @Test fun alarmContinuesBeyondFirstCycleAndBedtimeIsUnchanged() {
         val plan=Plan(LocalDate.parse("2026-09-13"))
-        assertNull(Schedule.nextWake(plan,r,LocalDateTime.parse("2026-10-01T00:00")))
+        assertEquals(LocalDateTime.parse("2026-10-08T08:30"),Schedule.nextWake(plan,r,LocalDateTime.parse("2026-10-01T00:00")))
         assertEquals(LocalDateTime.parse("2026-10-04T01:45"),Schedule.nextWindDown(p,r,LocalDateTime.parse("2026-10-04T01:00")))
         assertEquals(LocalDateTime.parse("2026-10-04T10:00"),BedtimeSchedule.morning(LocalDate.parse("2026-10-03"),r))
     }

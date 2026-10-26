@@ -28,7 +28,7 @@ import java.time.format.DateTimeFormatter
 
 @Composable fun HabitDeck(a:MainActivity,now:LocalDateTime,revision:Int,onManage:()->Unit) {
     val store=remember { HabitStore(a) }
-    val habits=remember(revision,now.toLocalDate()) { HabitCards.selected(a,"today",now.toLocalDate()) }
+    val habits=remember(revision,now.toLocalDate()) { HabitCards.selected(a,"today") }
     var open by rememberSaveable { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
         Text("今日打卡",fontSize=21.sp,fontWeight=FontWeight.SemiBold,modifier=Modifier.weight(1f))

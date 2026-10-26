@@ -16,7 +16,7 @@ class ReviewPlanTest {
     }
     @Test fun eachCycleHasItsOwnIdAndCompletesAfterDay21() {
         val h=habit();val other=habit()
-        val specs=Reviews.specs(listOf(h,other),null,start,false,true)
+        val specs=Reviews.specs(listOf(h,other),null,start,false,true,start)
         assertEquals(2,specs.size);assertEquals(2,specs.map { it.id }.distinct().size)
         assertEquals(h.start.plusDays(21).atStartOfDay(),specs[0].due)
         assertTrue(Reviews.specs(listOf(h.copy(archivedOn=start.plusDays(5))),null,start,false,true).isEmpty())
@@ -42,7 +42,7 @@ class ReviewPlanTest {
     @Test fun midnightWeekendExceptionsAndPlanBoundaryStillApply() {
         val plan=Plan(start);val midnight=Rules(bed=0)
         assertEquals(start.plusDays(1).atStartOfDay(),Schedule.windDownBedtime(plan,midnight,start.atTime(23,45)))
-        assertNull(Schedule.windDownBedtime(plan,midnight,start.plusDays(21).atTime(23,45)))
+        assertEquals(start.plusDays(22).atStartOfDay(),Schedule.windDownBedtime(plan,midnight,start.plusDays(21).atTime(23,45)))
         val weekend=Rules(bed=120,weekends=true,weekendBed=0)
         assertEquals("法定假期 · 休息日安排",weekend.bedtimeSource(start))
         assertEquals(start.plusDays(1).atStartOfDay(),Schedule.windDownBedtime(plan,weekend,start.atTime(23,45)))

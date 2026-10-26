@@ -26,7 +26,7 @@ object CoachAnalysis {
         val text=buildString {
             appendLine("统计日期：$from 至 $today（今天可能尚未结束）")
             appendLine("有记录 $recorded / $days 天；未记录 ${days-recorded} 天，不算失败。")
-            val dates=(selected.map { LocalDate.parse(it.day) }+(plan?.let { p -> (0L..20L).map { p.start.plusDays(it) }.filter { it in from..today } } ?: emptyList())).distinct().sorted()
+            val dates=(selected.map { LocalDate.parse(it.day) }+(plan?.let { p -> datesBetween(maxOf(p.start,from),today) } ?: emptyList())).distinct().sorted()
             val states=dates.map { date -> BedtimeSchedule.status(date,logs.find { it.day==date.toString() } ?: DayLog(date.toString()),logs.find { it.day==date.plusDays(1).toString() } ?: DayLog(date.plusDays(1).toString())) }
             appendLine("作息状态：已完成 ${states.count { it=="已完成" }} 天，部分完成 ${states.count { it=="部分完成" }} 天，未完成 ${states.count { it=="未完成" }} 天。")
             appendLine("工作日按一晚接次晨，两项完成=已完成、一项=部分完成、零项=未完成；按次晨日历判断休息日，只要求睡前打卡。当天仍可能继续完成。")

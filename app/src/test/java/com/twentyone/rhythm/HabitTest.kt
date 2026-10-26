@@ -7,10 +7,10 @@ import java.time.*
 class HabitTest {
     private val start=LocalDate.of(2026,10,5)
     private fun habit(mode:HabitMode=HabitMode.AT_LEAST,target:Int=20,days:Set<Int> = (1..7).toSet())=Habit(name="阅读",start=start,mode=mode,rules=listOf(HabitRule(start,days,target)))
-    @Test fun cycleAndSelectedWeekdaysAreBounded() {
+    @Test fun cycleDoesNotBoundSelectedWeekdays() {
         val h=habit(days=setOf(1,3,5));assertTrue(h.valid());assertEquals(9,h.dates().count { h.scheduled(it) })
         assertFalse(h.scheduled(start.minusDays(1)));assertTrue(h.scheduled(start));assertFalse(h.scheduled(start.plusDays(1)))
-        assertFalse(h.scheduled(start.plusDays(21)));assertEquals(21,h.day(h.end))
+        assertTrue(h.scheduled(start.plusDays(21)));assertEquals(21,h.day(h.end))
     }
     @Test fun unrecordedIsNotZeroOrReachedForAbstinence() {
         val h=habit(HabitMode.AT_MOST,0)
@@ -30,14 +30,14 @@ class HabitTest {
         assertEquals(1,HabitAnalysis.stats(h,entries,start.plusDays(8)).reached)
         assertFalse(h.scheduled(start.plusDays(8)))
     }
-    @Test fun reminderSkipsRecordedSentRestArchivedAndEnded() {
+    @Test fun reminderSkipsRecordedSentRestAndArchivedButContinuesAfterCycle() {
         val h=habit(days=setOf(1,3,5));val first=start.atTime(21,0)
         assertEquals(first,HabitAnalysis.nextReminder(listOf(h),emptyList(),emptySet(),start.atTime(20,0)))
         val expected=start.plusDays(2).atTime(21,0)
         assertEquals(expected,HabitAnalysis.nextReminder(listOf(h),listOf(HabitEntry(h.id,start,0)),emptySet(),start.atTime(20,0)))
         assertEquals(expected,HabitAnalysis.nextReminder(listOf(h),emptyList(),setOf(HabitAnalysis.key(h.id,start)),start.atTime(20,0)))
         assertNull(HabitAnalysis.nextReminder(listOf(h.copy(archivedOn=start)),emptyList(),emptySet(),start.atTime(20,0)))
-        assertNull(HabitAnalysis.nextReminder(listOf(h),emptyList(),emptySet(),h.end.plusDays(1).atStartOfDay()))
+        assertEquals(start.plusDays(21).atTime(21,0),HabitAnalysis.nextReminder(listOf(h),emptyList(),emptySet(),h.end.plusDays(1).atStartOfDay()))
     }
     @Test fun archiveStopsCountingSubsequentDates() {
         val h=habit().copy(archivedOn=start.plusDays(2));assertEquals(3,HabitAnalysis.stats(h,emptyList(),start.plusDays(8)).scheduled)

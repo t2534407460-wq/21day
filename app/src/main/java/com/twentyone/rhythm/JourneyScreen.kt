@@ -23,15 +23,18 @@ import java.time.format.DateTimeFormatter
 
 fun stamp(at:Long):String=Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("MM.dd HH:mm"))
 
-@Composable fun PlanScreen(s:Store,p:Plan,r:Rules,now:LocalDateTime,onDay:(String)->Unit,onEdit:()->Unit,onRenew:()->Unit) {
+@Composable fun PlanScreen(s:Store,p:Plan,r:Rules,now:LocalDateTime,onDay:(String)->Unit,onEdit:()->Unit) {
     val current=BedtimeSchedule.recordDay(p,r,now)
-    val currentIndex=(p.day(current ?: now.toLocalDate())-1).coerceIn(0,20)
+    val latest=p.cycleStart(current ?: now.toLocalDate())
+    var period by rememberSaveable(p.start.toString(),latest.toString()) { mutableStateOf(latest.toString()) }
+    val cycle=LocalDate.parse(period)
+    val currentIndex=(p.day(current ?: now.toLocalDate())-1).coerceAtLeast(0)%21
     var selected by rememberSaveable(p.start.toString()) { mutableIntStateOf(currentIndex) }
-    val date=p.start.plusDays(selected.toLong());val morning=date.plusDays(1)
+    val date=cycle.plusDays(selected.toLong());val morning=date.plusDays(1)
     val eveningLog=s.log(date.toString());val morningLog=s.log(morning.toString())
     val checked=BedtimeSchedule.checked(eveningLog);val verified=morningLog.verifiedAt>0
-    val nights=(0L..20L).count { BedtimeSchedule.checked(s.log(p.start.plusDays(it).toString())) }
-    val mornings=(1L..21L).count { s.log(p.start.plusDays(it).toString()).verifiedAt>0 }
+    val nights=(0L..20L).count { BedtimeSchedule.checked(s.log(cycle.plusDays(it).toString())) }
+    val mornings=(1L..21L).count { s.log(cycle.plusDays(it).toString()).verifiedAt>0 }
     val context=LocalContext.current
     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
         Column { Eyebrow("21 NIGHTS · 21 MORNINGS");Heading("把早晚，连成习惯。") }
@@ -40,7 +43,7 @@ fun stamp(at:Long):String=Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()
     Sheet(color=Ink) {
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.Bottom) {
             Column(Modifier.weight(1f)) {
-                Eyebrow(if(current!=null) "正在经历的这一晚" else if(now.toLocalDate().isBefore(p.start)) "准备开始" else "本轮回顾",Lime)
+                Eyebrow(if(now.toLocalDate().isBefore(p.start)) "准备开始" else if(cycle==latest) "正在经历的这一晚" else "往期回顾",Lime)
                 Row(verticalAlignment=Alignment.Bottom) { LargeNumber("${currentIndex+1}".padStart(2,'0'),Color.White,52);Text(" / 21",color=Lime,modifier=Modifier.padding(bottom=9.dp),fontSize=18.sp) }
             }
             Column(horizontalAlignment=Alignment.End,verticalArrangement=Arrangement.spacedBy(6.dp)) {
@@ -51,23 +54,29 @@ fun stamp(at:Long):String=Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()
         Text(p.goal,color=Color.White.copy(alpha=.85f),fontSize=14.sp)
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(3.dp)) {
             repeat(21) { index ->
-                val d=p.start.plusDays(index.toLong())
+                val d=cycle.plusDays(index.toLong())
                 Box(Modifier.weight(1f).height(5.dp).background(when(s.nightStatus(d)) { "已完成"->Lime;"部分完成"->Clay;else->Color.White.copy(alpha=.18f) },RoundedCornerShape(3.dp)))
             }
         }
-        SmallLight("${p.start.format(DateTimeFormatter.ofPattern("MM.dd"))} 晚 — ${p.start.plusDays(21).format(DateTimeFormatter.ofPattern("MM.dd"))} 早 · 一晚接次晨")
+        SmallLight("${cycle.format(DateTimeFormatter.ofPattern("MM.dd"))} 晚 — ${cycle.plusDays(21).format(DateTimeFormatter.ofPattern("MM.dd"))} 早 · 一晚接次晨")
     }
+    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
+        TextButton(onClick={period=cycle.minusDays(21).toString();selected=0},enabled=cycle>p.start) { Text("上一周期") }
+        Text("第 ${(p.day(cycle)-1)/21+1} 期",color=Moss)
+        TextButton(onClick={period=cycle.plusDays(21).toString();selected=0},enabled=cycle<latest) { Text("下一周期") }
+    }
+    SmallNote("作息持续生效，每21天总结一次，无需重新开始计划。")
     Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
             Text("选择一个夜晚",fontWeight=FontWeight.SemiBold)
-            if(current!=null && selected!=currentIndex) TextButton(onClick={selected=currentIndex}){Text("回到当前")}
+            if(current!=null && (selected!=currentIndex || cycle!=latest)) TextButton(onClick={period=latest.toString();selected=currentIndex}){Text("回到当前")}
         }
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
             repeat(3) { week -> FilterChip(colors=FilterChipDefaults.filterChipColors(selectedContainerColor=Sage,selectedLabelColor=Ink),selected=selected/7==week,onClick={selected=week*7+(selected%7)},label={Text("第 ${week+1} 周")},modifier=Modifier.weight(1f)) }
         }
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)) {
             repeat(7) { column ->
-                val index=selected/7*7+column;val d=p.start.plusDays(index.toLong());val active=index==selected
+                val index=selected/7*7+column;val d=cycle.plusDays(index.toLong());val active=index==selected
                 val bedDone=BedtimeSchedule.checked(s.log(d.toString()));val wakeDone=s.log(d.plusDays(1).toString()).verifiedAt>0
                 Column(Modifier.weight(1f).background(if(active) Moss else Color.Transparent,RoundedCornerShape(14.dp))
                     .clickable { selected=index }.semantics(mergeDescendants=true) { contentDescription="第 ${index+1} 天，${d} 晚，${if(d.isAfter(now.toLocalDate())) "尚未开始" else s.nightStatus(d)}，睡前${if(bedDone) "已打卡" else "未打卡"}，醒后${if(wakeDone) "已验证" else if(RestCalendar.isRest(d.plusDays(1))) "休息日自然醒" else "未验证"}" }
@@ -128,5 +137,4 @@ fun stamp(at:Long):String=Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()
         Text("✦",color=Moss,fontSize=24.sp)
         Column(verticalArrangement=Arrangement.spacedBy(6.dp)) { Text(stage.first,fontWeight=FontWeight.Medium);SmallNote(stage.second);SmallNote("未记录不会清空进度。上床、打卡与验证均不等同于实际睡眠检测。") }
     }
-    if(now.isAfter(BedtimeSchedule.morning(p.start.plusDays(20),r)) && !s.wake.active) Primary("开始下一轮 · 保留历史记录",click=onRenew)
 }

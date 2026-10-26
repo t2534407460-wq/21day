@@ -21,13 +21,15 @@ class ReleaseUpgradeTest {
             kotlinx.coroutines.runBlocking { ProjectSync.disable(c) }
             s.prefs.edit().clear().commit()
             s.migrateRestSchedule() // Apply the old release's first-open migration before setting user rules.
-            s.createPlan(Plan(LocalDate.now().plusDays(2)))
+            val start=if(args.getString("continuousUpgrade")=="true") LocalDate.now().minusDays(45) else LocalDate.now().plusDays(2)
+            s.createPlan(Plan(start))
             s.rules=Rules(passMinutes=8,passWaitSeconds=120,blocked=setOf("com.android.chrome"))
             s.nfcId="04A1B2C3D4E5F6";s.qrToken
             s.saveLog(DayLog(LocalDate.now().toString(),note="旧版覆盖升级保留记录",verifiedAt=1234))
-            val h=Habit(name="阅读",start=LocalDate.now(),mode=HabitMode.AT_LEAST,unit="分钟",rules=listOf(HabitRule(LocalDate.now(),target=20)))
-            HabitStore(c).save(h);HabitStore(c).record(HabitEntry(h.id,LocalDate.now(),25,"升级保留"))
-            HabitStore(c).startTimer(h.id)
+            val habitStart=if(args.getString("continuousUpgrade")=="true") start else LocalDate.now()
+            val h=Habit(name="阅读",start=habitStart,mode=HabitMode.AT_LEAST,unit="分钟",rules=listOf(HabitRule(habitStart,target=20)))
+            HabitStore(c).save(h,habitStart);HabitStore(c).record(HabitEntry(h.id,habitStart,25,"升级保留"))
+            HabitStore(c).startTimer(h.id,habitStart.atTime(12,0).epoch())
             s.prefs.edit().putStringSet("cards_widget_9911",setOf(h.id)).putString("pass_night",LocalDate.now().minusDays(1).toString())
                 .putLong("pass_until",System.currentTimeMillis()+480_000).putString("emergency_night",LocalDate.now().toString()).apply()
             ProjectPreferences.get(c,"coach_reports").edit().putString("last_7","旧版报告内容").commit()
@@ -47,6 +49,10 @@ class ReleaseUpgradeTest {
             assertEquals(key,CloudCoach.readKey(c));assertEquals("upgrade@example.test",ProjectAccount.email(c))
             assertEquals(old.getString("keyFile"),File(c.noBackupFilesDir,"deepseek-key.json").readText())
             assertEquals(old.getString("sessionFile"),File(c.noBackupFilesDir,"account-session.json").readText())
+            if(args.getString("continuousUpgrade")=="true") {
+                assertTrue(HabitStore(c).habits().single().scheduled(LocalDate.now()))
+                Alarms.schedule(c);assertTrue(s.prefs.getLong("scheduled_wake",0)>System.currentTimeMillis())
+            }
         }
     }
 }

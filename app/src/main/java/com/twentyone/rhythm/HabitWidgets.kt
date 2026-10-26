@@ -61,7 +61,6 @@ object WidgetCards {
                 if(rest) card.put("goal","自然醒 · 不响起床闹钟")
             } else if(card.has("habit")) {
                 val (all,entries)=HabitStore.decode(card.getJSONObject("habit"));val h=all.single();val start=card.optLong("timer")
-                if(h.end<now.toLocalDate() && start==0L) continue
                 val entry=entries.find { it.date==now.toLocalDate() }
                 val value=when { start>0->"${Instant.ofEpochMilli(start).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm"))} 开始计时";entry!=null->"${entry.value} ${h.unit}";!h.scheduled(now.toLocalDate())->"今天未安排";else->"尚未记录" }
                 card.put("value",value).put("goal",h.goal(now.toLocalDate()))

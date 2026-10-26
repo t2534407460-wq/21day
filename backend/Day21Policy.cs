@@ -82,7 +82,7 @@ public sealed class Day21Policy : ISyncPolicy
     public static bool CanRecord(JsonNode plan, string day)
     {
         var date = DateOnly.ParseExact(day, "yyyy-MM-dd"); var start = DateOnly.ParseExact(Text(plan, "start"), "yyyy-MM-dd");
-        if (plan["archivedOn"] is not null || date < start || date > start.AddDays(20)) return false;
+        if (plan["archivedOn"] is not null || date < start) return false;
         return Rule(plan, day)["days"]!.AsArray().Any(d => d!.GetValue<int>() == (date.DayOfWeek == DayOfWeek.Sunday ? 7 : (int)date.DayOfWeek));
     }
     public static JsonNode Rule(JsonNode plan, string day) => plan["rules"]!.AsArray().Last(r => string.CompareOrdinal(Text(r!, "from"), day) <= 0)!;
@@ -92,22 +92,22 @@ public sealed class Day21Policy : ISyncPolicy
         if (!Guid.TryParse(id, out _) || Text(plan,"id") != id || Text(plan,"name").Length is < 1 or > 40 || Text(plan,"unit").Length is < 1 or > 8) throw new ArgumentException("Invalid habit.");
         var start = DateOnly.ParseExact(Text(plan,"start"), "yyyy-MM-dd"); var rules = plan["rules"]!.AsArray();
         var mode = Text(plan,"mode"); var input = Text(plan,"input");
-        if (mode is not ("CHECK" or "AT_LEAST" or "AT_MOST") || input is not ("MANUAL" or "COUNT" or "TIMER" or "DAILY") || rules.Count is < 1 or > 21) throw new ArgumentException("Invalid habit rules.");
+        if (mode is not ("CHECK" or "AT_LEAST" or "AT_MOST") || input is not ("MANUAL" or "COUNT" or "TIMER" or "DAILY") || rules.Count < 1) throw new ArgumentException("Invalid habit rules.");
         DateOnly? previous = null;
         foreach (var rule in rules)
         {
             var from = DateOnly.ParseExact(Text(rule!,"from"),"yyyy-MM-dd"); var target = rule!["target"]!.GetValue<int>(); var days = rule["days"]!.AsArray();
-            if (previous is null && from != start || previous is not null && from <= previous || from > start.AddDays(20) || target is < 0 or > 100000 || mode != "AT_MOST" && target == 0 || mode == "CHECK" && target != 1 || days.Count is < 1 or > 7 || days.Any(d => d!.GetValue<int>() is < 1 or > 7)) throw new ArgumentException("Invalid rule.");
+            if (from < start || previous is null && from != start || previous is not null && from <= previous || target is < 0 or > 100000 || mode != "AT_MOST" && target == 0 || mode == "CHECK" && target != 1 || days.Count is < 1 or > 7 || days.Any(d => d!.GetValue<int>() is < 1 or > 7)) throw new ArgumentException("Invalid rule.");
             if (rule["reminder"] is not null && rule["reminder"]!.GetValue<int>() is < 0 or > 1439) throw new ArgumentException("Invalid reminder.");
             previous = from;
         }
         if (input == "TIMER" && (Text(plan,"unit") != "分钟" || mode != "AT_LEAST") || input == "COUNT" && mode == "CHECK") throw new ArgumentException("Invalid input mode.");
         if (plan["archivedOn"] is not null) DateOnly.ParseExact(Text(plan,"archivedOn"),"yyyy-MM-dd");
-        var entries = data["entries"]!.AsObject(); if (entries.Count > 21) throw new ArgumentException("Too many entries.");
+        var entries = data["entries"]!.AsObject();
         foreach (var (day, entry) in entries)
         {
             var date = DateOnly.ParseExact(day,"yyyy-MM-dd");
-            if (date < start || date > start.AddDays(20) || Text(entry!,"habitId") != id || Text(entry!,"date") != day || entry!["value"]!.GetValue<int>() is < 0 or > 100000 || Text(entry,"note").Length > 300 || entry["remainderSeconds"]!.GetValue<int>() is < 0 or > 59 || entry["recordedAt"]!.GetValue<long>() <= 0) throw new ArgumentException("Invalid entry.");
+            if (date < start || Text(entry!,"habitId") != id || Text(entry!,"date") != day || entry!["value"]!.GetValue<int>() is < 0 or > 100000 || Text(entry,"note").Length > 300 || entry["remainderSeconds"]!.GetValue<int>() is < 0 or > 59 || entry["recordedAt"]!.GetValue<long>() <= 0) throw new ArgumentException("Invalid entry.");
             if (mode == "CHECK" && entry["value"]!.GetValue<int>() > 1) throw new ArgumentException("Invalid check.");
             var sessions = entry["sessions"]!.AsArray();
             if (sessions.Count > 200 || input != "TIMER" && (sessions.Count != 0 || entry["remainderSeconds"]!.GetValue<int>() != 0)) throw new ArgumentException("Invalid sessions.");

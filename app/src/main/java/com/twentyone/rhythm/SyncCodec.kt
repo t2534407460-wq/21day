@@ -9,7 +9,7 @@ internal data class SyncItem(val type:String,val id:String,val data:JSONObject?)
     val key get()="$type/$id"
 }
 
-/** A habit round is an aggregate: its rules, 21 daily totals and active timer commit together. */
+/** A habit is an aggregate: its rules, daily totals and active timer commit together. */
 internal object SyncCodec {
     val namespaces=listOf("rhythm","coach_chat","coach_voice","coach_reports","habit_reviews","review_settings")
     val types=setOf("habits","sleep_plans","sleep_logs","sleep_events","preferences","ui_layouts","chats","reviews")

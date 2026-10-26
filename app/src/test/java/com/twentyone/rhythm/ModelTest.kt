@@ -13,11 +13,11 @@ class ModelTest {
         assertEquals("2026-10-03", Schedule.night(plan,rules,LocalDateTime.parse("2026-10-04T06:59:59"))!!.date.toString())
         assertNull(Schedule.night(plan,rules,LocalDateTime.parse("2026-10-04T07:00:00")))
     }
-    @Test fun planDoesNotStartYesterdayAndEndsAfterLastNight() {
+    @Test fun planDoesNotStartYesterdayAndContinuesAfterFirstCycle() {
         assertNull(Schedule.night(plan,rules,LocalDateTime.parse("2026-10-03T01:00:00")))
         assertNotNull(Schedule.night(plan,rules,LocalDateTime.parse("2026-10-24T06:00:00")))
-        assertNull(Schedule.night(plan,rules,LocalDateTime.parse("2026-10-24T23:00:00")))
-        assertNull(Schedule.nextWake(plan,rules,LocalDateTime.parse("2026-10-24T08:00:00")))
+        assertNotNull(Schedule.night(plan,rules,LocalDateTime.parse("2026-10-24T23:00:00")))
+        assertEquals(LocalDateTime.parse("2026-10-26T07:00"),Schedule.nextWake(plan,rules,LocalDateTime.parse("2026-10-24T08:00:00")))
     }
     @Test fun weekendUsesWakeDaysAndNightStarts() {
         val r=rules.copy(weekends=true,weekendBed=30,weekendWake=540)

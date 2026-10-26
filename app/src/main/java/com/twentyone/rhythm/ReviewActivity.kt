@@ -91,7 +91,7 @@ private data class ReviewContent(val id:String,val report:ReviewReport?,val stat
             }
         }
         if(data==null) SmallNote("正在读取总结…")
-        else if(spec==null) Sheet(color=Sage) { Text("还没有${if(tab=="week") "周" else "21天"}总结");SmallNote("添加习惯后，这里会显示对应周期。周总结也包含作息计划。") }
+        else if(spec==null) Sheet(color=Sage) { Text("还没有${if(tab=="week") "周" else "21天"}总结");SmallNote("添加作息或习惯计划后，这里会显示对应周期。计划持续生效，每21天总结一次。") }
         spec?.let { spec ->
             val loaded=content?.takeIf { it.id==spec.id };val report=loaded?.report;val due=!spec.due.isAfter(now)
             val automatic=if(spec.kind=="week") data?.weekly==true else data?.cycle==true

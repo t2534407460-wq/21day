@@ -54,8 +54,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
         Text("自动复盘",fontWeight=FontWeight.SemiBold)
         Row(verticalAlignment=Alignment.CenterVertically) { Text("每周总结",Modifier.weight(1f));Switch(weekly,{weekly=it;store.settings.edit().putBoolean("weekly",it).apply();ReviewScheduler.schedule(c)}) }
         SmallNote("每周日 00:00 安排此前7天的总结，按作息及每个习惯分别生成。")
-        Row(verticalAlignment=Alignment.CenterVertically) { Text("21 天习惯总结",Modifier.weight(1f));Switch(cycle,{cycle=it;store.settings.edit().putBoolean("cycle",it).apply();ReviewScheduler.schedule(c)}) }
-        SmallNote("每个习惯第21天结束后生成一份独立总结；提前归档的短周期不冒充21天。")
+        Row(verticalAlignment=Alignment.CenterVertically) { Text("21 天总结",Modifier.weight(1f));Switch(cycle,{cycle=it;store.settings.edit().putBoolean("cycle",it).apply();ReviewScheduler.schedule(c)}) }
+        SmallNote("作息和每个习惯每21天生成独立总结，计划继续执行。作息包含最后一晚的次晨；提前归档的短周期不冒充21天。")
         SmallNote("自动复盘向 DeepSeek 发送对应周期的习惯名称、目标、日期和实际数值，作息发送该周期统计；不发送备注、验证码或聊天。使用你的 API 账户计费，可随时关闭。")
         SmallNote("后台任务需联网，省电、关机或系统限制可能延后执行。失败不会反复请求，可在复盘看板重试；关闭任务不会撤回已经发送的数据。")
         SettingLink("复盘看板","按习惯查看每周与21天总结") { c.startActivity(Intent(c,ReviewActivity::class.java)) }

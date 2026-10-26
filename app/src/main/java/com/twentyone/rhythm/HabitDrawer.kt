@@ -18,15 +18,14 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 
 object HabitCards {
-    fun available(c:Context,today:LocalDate=LocalDate.now())=HabitStore(c).let { store ->
-        store.habits().filter { !it.archived && (it.end>=today || store.running(it.id)>0) }
+    fun available(c:Context)=HabitStore(c).let { store ->
+        store.habits().filter { !it.archived }
     }
-    fun selected(c:Context,key:String,today:LocalDate=LocalDate.now()):List<Habit> {
+    fun selected(c:Context,key:String):List<Habit> {
         val ids=Store(c).prefs.getStringSet("cards_$key",null)
-        return available(c,today).filter { ids==null || it.id in ids }
+        return available(c).filter { ids==null || it.id in ids }
     }
     fun save(c:Context,key:String,ids:Set<String>) { Store(c).prefs.edit().putStringSet("cards_$key",ids).commit();RhythmWidget.refresh(c) }
     fun group(h:Habit)=when(h.input) { HabitInput.TIMER->"区间打卡";HabitInput.COUNT->"次数打卡";HabitInput.DAILY->"每日确认";HabitInput.MANUAL->"填写总量" }
@@ -60,7 +59,7 @@ object HabitCards {
         prefs.registerOnSharedPreferenceChangeListener(listener)
         onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
-    val all=remember(revision,now.toLocalDate()) { HabitCards.selected(c,key,now.toLocalDate()) }
+    val all=remember(revision,now.toLocalDate()) { HabitCards.selected(c,key) }
     var group by rememberSaveable { mutableStateOf("全部") }
     var select by remember { mutableStateOf(false) };var edit by remember { mutableStateOf<Habit?>(null) }
     var message by remember { mutableStateOf<String?>(null) }

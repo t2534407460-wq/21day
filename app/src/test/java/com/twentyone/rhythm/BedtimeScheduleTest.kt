@@ -17,7 +17,7 @@ class BedtimeScheduleTest {
     @Test fun finalEveningIncludesTheTwentySecondMorning() {
         val last=day.plusDays(20)
         assertEquals(last,BedtimeSchedule.recordDay(plan,rules,last.plusDays(1).atTime(6,30)))
-        assertNull(BedtimeSchedule.recordDay(plan,rules,last.plusDays(1).atTime(7,0)))
+        assertEquals(last.plusDays(1),BedtimeSchedule.recordDay(plan,rules,last.plusDays(1).atTime(7,0)))
         assertNull(BedtimeSchedule.recordDay(plan,rules,day.minusDays(1).atTime(22,0)))
     }
     @Test fun exceptionsAndWeekendUseTheCorrectCalendarDates() {
@@ -46,6 +46,6 @@ class BedtimeScheduleTest {
         assertEquals(day.plusDays(1),BedtimeSchedule.nextLockDay(plan,rules,emptyList(),setOf(day.toString()),day.atTime(22,0)))
         assertEquals(day,BedtimeSchedule.nextLockDay(plan,rules,emptyList(),emptySet(),day.plusDays(1).atTime(6,59)))
         assertEquals(day.plusDays(1),BedtimeSchedule.nextLockDay(plan,rules,emptyList(),emptySet(),day.plusDays(1).atTime(7,0)))
-        assertNull(BedtimeSchedule.nextLockDay(plan,rules,emptyList(),emptySet(),day.plusDays(21).atTime(7,0)))
+        assertEquals(day.plusDays(21),BedtimeSchedule.nextLockDay(plan,rules,emptyList(),emptySet(),day.plusDays(21).atTime(7,0)))
     }
 }

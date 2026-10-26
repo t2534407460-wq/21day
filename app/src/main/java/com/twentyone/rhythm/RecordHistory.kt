@@ -7,7 +7,7 @@ data class HistoryRecord(val day:LocalDate,val time:Long,val kind:String,val det
 object RecordHistory {
     fun records(logs:List<DayLog>,habits:List<Habit>,entries:List<HabitEntry>,events:List<EventLog>,plan:Plan?=null,today:LocalDate=LocalDate.now()):List<HistoryRecord> {
         val result=mutableListOf<HistoryRecord>()
-        val dates=(logs.map { LocalDate.parse(it.day) }+(plan?.let { p -> (0L..20L).map { p.start.plusDays(it) } } ?: emptyList())).distinct().filter { it<=today }
+        val dates=(logs.map { LocalDate.parse(it.day) }+(plan?.let { p -> datesBetween(p.start,today) } ?: emptyList())).distinct().filter { it<=today }
         dates.forEach { date ->
             result+=HistoryRecord(date,0,"作息完成度","$date 晚 → ${date.plusDays(1)} 早 · "+BedtimeSchedule.status(date,logs.find { it.day==date.toString() } ?: DayLog(date.toString()),logs.find { it.day==date.plusDays(1).toString() } ?: DayLog(date.plusDays(1).toString())))
         }
@@ -33,11 +33,11 @@ object RecordHistory {
         val text=buildString {
             appendLine(sleep.text)
             appendLine("习惯和操作历史：${history.size} 条；日总量是当前累计值，操作是变化过程，不可再次相加。")
-            val relevant=habits.filter { it.start<=today && it.end>=sleep.from }
+            val relevant=habits.filter { it.start<=today && (it.archivedOn==null || it.archivedOn>=sleep.from) }
             relevant.take(30).forEach { h ->
                 val stats=HabitAnalysis.stats(h,entries,today,sleep.from,today)
                 val own=entries.filter { it.habitId==h.id && it.date in sleep.from..today }
-                appendLine("习惯 ${h.name}：${h.input.label}，${h.start} 至 ${h.end}，${if(h.archived) "已归档" else "进行中"}；所选范围计划 ${stats.scheduled} 天，记录 ${stats.recorded} 天，达标 ${stats.reached} 天，实际累计 ${own.sumOf { it.value.toLong() }} ${h.unit}，余秒累计 ${own.sumOf { it.remainderSeconds }}。")
+                appendLine("习惯 ${h.name}：${h.input.label}，${h.start} 开始，${if(h.archived) "已归档" else "持续进行，每21天复盘"}；所选范围计划 ${stats.scheduled} 天，记录 ${stats.recorded} 天，达标 ${stats.reached} 天，实际累计 ${own.sumOf { it.value.toLong() }} ${h.unit}，余秒累计 ${own.sumOf { it.remainderSeconds }}。")
             }
             if(relevant.size>30) appendLine("习惯摘要仅发送前30个，其余未发送。")
             selected.forEach { row -> appendLine("${row.day}"+(if(row.time>0) " (${time(row.time)})" else "")+" · ${row.kind}：${row.detail.take(240)}") }

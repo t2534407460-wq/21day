@@ -71,7 +71,7 @@ class MainActivity : ComponentActivity() {
     var settingsCategory by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(activity.habitRequest) { if(activity.habitRequest>0) tab=2 }
     LaunchedEffect(activity.settingsRequest) { if(activity.settingsRequest>0) { settingsCategory=activity.settingsTarget;tab=5 } }
-    var editor by remember { mutableStateOf(false) }; var renew by remember { mutableStateOf(false) }
+    var editor by remember { mutableStateOf(false) }
     var logDay by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(activity.bedtimeRequest) { if(activity.bedtimeRequest>0) { tab=0;logDay=p?.let { BedtimeSchedule.recordDay(it,r,LocalDateTime.now())?.toString() } } }
     var message by remember { mutableStateOf<String?>(null) }
@@ -112,7 +112,7 @@ class MainActivity : ComponentActivity() {
                             OutlinedButton(onClick={tab=2},modifier=Modifier.fillMaxWidth()) { Text("先去创建阅读、运动等习惯") }
                             SmallNote("习惯模块可独立使用。21 天是启动与复盘周期，并非养成保证。")
                         } else if(tab==0) Today(activity,s,p,r,now,revision,onHabits={tab=2},onRecord={logDay=it},onSettings={tab=5},onPlan={journeySection=0;tab=1})
-                            else PlanScreen(s,p,r,now,onDay={logDay=it},onEdit={editor=true},onRenew={renew=true;editor=true})
+                            else PlanScreen(s,p,r,now,onDay={logDay=it},onEdit={editor=true})
                         2->HabitScreen(activity,now.toLocalDate(),revision,scrollState,onSettings={settingsCategory="权限与后台";tab=5})
                         5->SettingsScreen(activity,s,r,activity.permissionRevision,settingsCategory,{settingsCategory=it},scrollState,onHabits={tab=2},onEdit={editor=true},onMessage={message=it},onPrivacy={showPrivacy=true})
                     }
@@ -120,14 +120,10 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    if(editor) PlanDialog(p,s.editableRules,renew,onDismiss={editor=false;renew=false}) { plan,rules ->
-        val active=p?.let { Schedule.night(it,r,LocalDateTime.now()) }!=null
-        if(renew && (active || s.wake.active)) { message="请在本晚限制与起床验证结束后开始下一轮" }
-        else {
-            val deferred=s.saveRules(rules)
-            s.createPlan(plan); Alarms.schedule(activity); editor=false;renew=false
-            if(deferred) message="已保存。当前夜间规则保持，新的安排将在本晚结束后生效。"
-        }
+    if(editor) PlanDialog(p,s.editableRules,onDismiss={editor=false}) { plan,rules ->
+        val deferred=s.saveRules(rules)
+        s.createPlan(plan); Alarms.schedule(activity); editor=false
+        if(deferred) message="已保存。当前夜间规则保持，新的安排将在本晚结束后生效。"
     }
     logDay?.let { day -> RecordFlow(s.log(day),onDismiss={logDay=null},onChange={ change ->
         if(p!=null && BedtimeSchedule.recordDay(p,r,LocalDateTime.now()).toString()==day) { s.updateLog(day,change);RhythmWidget.refresh(activity) }
@@ -153,13 +149,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 @Composable fun Today(activity:MainActivity,s:Store,p:Plan,r:Rules,now:LocalDateTime,revision:Int,onHabits:()->Unit,onRecord:(String)->Unit,onSettings:()->Unit,onPlan:()->Unit) {
-    val recordDate=BedtimeSchedule.recordDay(p,r,now);val day=p.day(recordDate ?: now.toLocalDate()); val night=Schedule.night(p,r,now); val wake=s.wake
+    val recordDate=BedtimeSchedule.recordDay(p,r,now);val day=p.day(recordDate ?: now.toLocalDate());val cycle=p.cycleStart(recordDate ?: now.toLocalDate());val cycleDay=(day-1).coerceAtLeast(0)%21+1; val night=Schedule.night(p,r,now); val wake=s.wake
     val morning=(recordDate ?: now.toLocalDate()).plusDays(1);val restMorning=RestCalendar.isRest(morning)
     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
         Column { Eyebrow(now.format(DateTimeFormatter.ofPattern("MM 月 dd 日  ·  EEEE",java.util.Locale.CHINESE))); Heading(if(now.hour<12) "早安，慢慢开始。" else if(now.hour<18) "留一点时间给自己。" else "今晚，好好休息。") }
     }
     Sheet(color=Ink) {
-        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { Eyebrow(if(day in 1..21) "DAY ${day.toString().padStart(2,'0')}  /  21" else if(day<1) "即将开始" else "本轮已结束",Lime); Icon(Icons.Outlined.DarkMode,null,tint=Lime) }
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { Eyebrow(if(day<1) "即将开始" else "第 ${(day-1)/21+1} 期 · DAY ${cycleDay.toString().padStart(2,'0')} / 21",Lime); Icon(Icons.Outlined.DarkMode,null,tint=Lime) }
         Text(r.bedtimeSource(recordDate ?: now.toLocalDate()),fontSize=22.sp,color=Color.White,fontWeight=FontWeight.Medium)
         Row(Modifier.fillMaxWidth().padding(vertical=8.dp),horizontalArrangement=Arrangement.SpaceBetween) {
             Column { SmallLight("${BedtimeSchedule.bedtime(recordDate ?: now.toLocalDate(),r).format(DateTimeFormatter.ofPattern("MM.dd"))} 睡前 / 锁屏"); LargeNumber(timeText(r.bedtime(recordDate ?: now.toLocalDate())),Color.White,43) }
@@ -193,8 +189,8 @@ class MainActivity : ComponentActivity() {
     }
     Row(Modifier.fillMaxWidth().clickable(onClick=onPlan),horizontalArrangement=Arrangement.SpaceBetween) { Text("我的 21 天",fontWeight=FontWeight.SemiBold); Text("查看计划  →",color=Moss,fontSize=13.sp) }
     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-        val week=((day.coerceIn(1,21)-1)/7)*7
-        repeat(7){i-> val date=p.start.plusDays((week+i).toLong()); val isToday=date==now.toLocalDate()
+        val week=((cycleDay-1)/7)*7
+        repeat(7){i-> val date=cycle.plusDays((week+i).toLong()); val isToday=date==now.toLocalDate()
             Column(Modifier.weight(1f),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(8.dp)) {
                 val state=s.nightStatus(date);val complete=state=="已完成"
                 Box(Modifier.size(34.dp).background(if(complete) Moss else if(state=="部分完成") Lime else Sage,CircleShape),contentAlignment=Alignment.Center) { Text(if(complete) "✓" else if(state=="部分完成") "◐" else "${week+i+1}",color=if(complete) Color.White else Ink,fontSize=13.sp) }
@@ -210,22 +206,22 @@ class MainActivity : ComponentActivity() {
 }
 @Composable fun SmallLight(text:String) { Text(text,color=Color.White.copy(alpha=.65f),fontSize=12.sp) }
 
-@Composable fun PlanDialog(p:Plan?,r:Rules,renew:Boolean,onDismiss:()->Unit,onSave:(Plan,Rules)->Unit) {
-    var start by remember { mutableStateOf(if(p==null || renew) LocalDate.now().toString() else p.start.toString()) }
+@Composable fun PlanDialog(p:Plan?,r:Rules,onDismiss:()->Unit,onSave:(Plan,Rules)->Unit) {
+    var start by remember { mutableStateOf(if(p==null) LocalDate.now().toString() else p.start.toString()) }
     var goal by remember { mutableStateOf(p?.goal ?: "规律睡觉，清醒地开始每一天") }
     var action by remember { mutableStateOf(p?.action ?: "洗漱后，把手机放到固定充电处") }
     var bed by remember { mutableStateOf(timeText(r.bed)) }; var wake by remember { mutableStateOf(timeText(r.wake)) }
     var weekends by remember { mutableStateOf(r.weekends) }; var wb by remember { mutableStateOf(timeText(r.weekendBed)) }; var ww by remember { mutableStateOf(timeText(r.weekendWake)) }
     var error by remember { mutableStateOf("") }
-    AlertDialog(onDismissRequest=onDismiss,title={Text(if(p==null || renew) "开始我的 21 天" else "调整计划")},text={ Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-        if(p==null || renew) DateInput("开始日期",start){start=it}
+    AlertDialog(onDismissRequest=onDismiss,title={Text(if(p==null) "设置作息计划" else "调整计划")},text={ Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+        if(p==null) DateInput("开始日期",start){start=it}
         OutlinedTextField(goal,{goal=it.take(120)},label={Text("这一轮，我希望")})
         OutlinedTextField(action,{action=it.take(120)},label={Text("每天的一个小行动")})
         TimeInput("夜间限制开始",bed){bed=it};TimeInput("起床 / 夜间限制结束",wake){wake=it}
         Row(verticalAlignment=Alignment.CenterVertically) { Switch(weekends,{weekends=it}); Text("休息日使用不同时间",fontSize=14.sp) }
         if(weekends) { TimeInput("休息日前夜睡前",wb){wb=it};TimeInput("休息日参考起床 / 限制结束",ww){ww=it};SmallNote("包含周末与2026年中国大陆法定假期，调休上班日按普通作息。凌晨睡前属于前一晚，配当天起床。其他年份暂按周末，可提前设置特殊日期。") }
         SmallNote("休息日自然醒，不响起床闹钟、不强制扫码或 NFC；调休上班日照常。共用时间或设置特殊时间不会开启休息日闹钟，睡前提醒与限制保持。")
-        SmallNote("给睡眠留足时间。夜间修改时间会在本晚结束后生效。21 天是启动周期，并非养成保证。")
+        SmallNote("给睡眠留足时间。夜间修改时间会在本晚结束后生效。作息持续生效，每21天总结一次，并非养成保证。")
         if(error.isNotEmpty()) Text(error,color=Clay)
     } },confirmButton={TextButton(onClick={
         val date=runCatching { LocalDate.parse(start) }.getOrNull();val b=parseTime(bed);val w=parseTime(wake);val weekendB=parseTime(wb);val weekendW=parseTime(ww)
