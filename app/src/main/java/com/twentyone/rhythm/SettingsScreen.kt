@@ -27,7 +27,7 @@ import com.google.zxing.MultiFormatWriter
 import java.time.*
 import java.time.format.DateTimeFormatter
 
-@Composable fun SettingsScreen(a:MainActivity,s:Store,r:Rules,permissionRevision:Int,category:String,onCategory:(String)->Unit,scrollState:ScrollState,onHabits:()->Unit,onEdit:()->Unit,onMessage:(String)->Unit,onPrivacy:()->Unit) {
+@Composable fun SettingsScreen(a:MainActivity,s:Store,p:Plan?,r:Rules,permissionRevision:Int,category:String,onCategory:(String)->Unit,scrollState:ScrollState,onHabits:()->Unit,onEdit:()->Unit,onMessage:(String)->Unit,onPrivacy:()->Unit) {
     var apps by remember { mutableStateOf<String?>(null) };var consent by remember { mutableStateOf(false) };var qr by remember { mutableStateOf(false) };var nfc by remember { mutableStateOf(false) }
     var limits by remember { mutableStateOf(false) };var special by remember { mutableStateOf(false) };var restoreConfirm by remember { mutableStateOf(false) }
     LaunchedEffect(category) { scrollState.scrollTo(0) }
@@ -59,6 +59,7 @@ import java.time.format.DateTimeFormatter
     if(category=="作息计划") Sheet {
         Text("作息与约束",fontWeight=FontWeight.SemiBold)
         SettingLink("我的作息时间","${timeText(r.bed)} — ${timeText(r.wake)}",onEdit)
+        p?.let { WakePauseSetting(a,s,it,r) }
         SmallNote("休息日：${timeText(r.weekendBed)} — ${timeText(r.weekendWake)}；${if(r.weekends) "已包含2026年法定假期与调休" else "尚未启用"}。特殊日期优先。")
         s.plan?.let { Schedule.nextWindDown(it,r,LocalDateTime.now()) }?.let { next -> SmallNote("下次准备提醒：${next.format(DateTimeFormatter.ofPattern("M月d日 HH:mm"))}；${r.bedtimeSource(BedtimeReminders.evening(next.plusMinutes(15)))}。15分钟后到点提醒，仍未打卡时锁屏一次。") }
         SettingLink("提前安排特殊日期","已安排 ${s.editableRules.exceptions.size} 天"){special=true}
@@ -134,6 +135,33 @@ import java.time.format.DateTimeFormatter
     if(nfc) {
         DisposableEffect(Unit) { a.nfcListener={id->if(id.isNotBlank()){s.nfcId=id;nfc=false;onMessage("已绑定这个 NFC 标签。请把它固定在洗漱区。")}};onDispose{a.nfcListener=null} }
         AlertDialog(onDismissRequest={nfc=false},title={Text("触碰你的 NFC 标签")},text={Text("将手机背部 NFC 区域靠近标签。只读取标签标识，不写入或修改卡片。建议使用独立标签，不使用门禁或支付卡。")},confirmButton={TextButton(onClick={nfc=false}){Text("取消")}})
+    }
+}
+@Composable private fun WakePauseSetting(a:MainActivity,s:Store,plan:Plan,rules:Rules) {
+    val now=clock()
+    val today=now.toLocalDate()
+    val wake=s.wake
+    val paused=s.wakePauseDate?.takeUnless { it.isBefore(today) }
+    val canUndo=paused!=null && (paused>today || Schedule.canPauseWake(plan,rules,paused,now))
+    val next=Schedule.nextWake(plan,rules,now,today.takeIf { wake.hasStarted(it) })?.toLocalDate()
+    var date by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf(false) }
+    val dateFormat=remember { DateTimeFormatter.ofPattern("yyyy年M月d日") }
+    SettingLink("暂停一天起床闹钟",paused?.let { "${it.format(dateFormat)}已暂停" } ?: "选一个尚未响铃的工作日") {
+        date=(paused.takeIf { canUndo } ?: next)?.toString()
+        error=false
+    }
+    date?.let { selected ->
+        AlertDialog(onDismissRequest={date=null},title={Text("暂停一天起床闹钟")},text={
+            Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+                SmallNote("只跳过选中日期的起床闹钟，之后自动恢复。睡前提醒和夜间限制照常。")
+                DateInput("暂停日期",selected,minDate=next) { date=it;error=false }
+                if(error) Text("请选择作息计划内还未响铃的工作日。",color=Clay)
+                if(canUndo) TextButton(onClick={Alarms.setWakePause(a,null);date=null}) { Text("取消已安排的暂停") }
+            }
+        },confirmButton={TextButton(onClick={
+            if(Alarms.setWakePause(a,LocalDate.parse(selected))) date=null else error=true
+        }) { Text("确认暂停") }},dismissButton={TextButton(onClick={date=null}) { Text("返回") }})
     }
 }
 @Composable fun LimitsDialog(r:Rules,onDismiss:()->Unit,onSave:(Rules)->Unit) {

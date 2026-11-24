@@ -42,8 +42,12 @@ object Schedule {
         }
         return null
     }
-    fun nextWake(plan: Plan, rules: Rules, now: LocalDateTime): LocalDateTime? =
-        plan.datesFrom(now.toLocalDate()).filterNot { RestCalendar.isRest(it) }.map { it.atStartOfDay().plusMinutes(rules.wakeTime(it).toLong()) }.firstOrNull { it.isAfter(now) }
+    fun skipsWake(date: LocalDate, pausedDate: LocalDate?) = RestCalendar.isRest(date) || date==pausedDate
+    private fun wakeAt(rules: Rules, date: LocalDate) = date.atStartOfDay().plusMinutes(rules.wakeTime(date).toLong())
+    fun canPauseWake(plan: Plan, rules: Rules, date: LocalDate, now: LocalDateTime) =
+        plan.contains(date) && !RestCalendar.isRest(date) && wakeAt(rules,date).isAfter(now)
+    fun nextWake(plan: Plan, rules: Rules, now: LocalDateTime, pausedDate: LocalDate? = null): LocalDateTime? =
+        plan.datesFrom(now.toLocalDate()).filterNot { skipsWake(it,pausedDate) }.map { wakeAt(rules,it) }.firstOrNull { it.isAfter(now) }
     fun nextWindDown(plan: Plan, rules: Rules, now: LocalDateTime): LocalDateTime? =
         plan.datesFrom(now.toLocalDate().minusDays(1)).map { BedtimeSchedule.bedtime(it,rules).minusMinutes(15) }.firstOrNull { it.isAfter(now) }
     // Recheck the effective rules at delivery; an old queued callback is not proof that a reminder is due.
@@ -63,6 +67,7 @@ data class WakeSession(
 ) {
     val active get() = phase in setOf(WakePhase.RINGING, WakePhase.WALK, WakePhase.SECOND_WAIT, WakePhase.SECOND_READY)
     val ringing get() = active && phase!=WakePhase.SECOND_WAIT && (!test || phase!=WakePhase.WALK)
+    fun hasStarted(date: LocalDate) = !test && phase!=WakePhase.IDLE && day==date.toString()
     fun begin(now: Long): WakeSession = if (test && phase in setOf(WakePhase.RINGING, WakePhase.SECOND_READY)) copy(phase = WakePhase.WALK, dueAt = now + 180_000) else this
     fun verify(now: Long, rules: Rules): WakeSession {
         if (!active || (phase == WakePhase.SECOND_WAIT && now < dueAt)) return this

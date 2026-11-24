@@ -114,7 +114,7 @@ class MainActivity : ComponentActivity() {
                         } else if(tab==0) Today(activity,s,p,r,now,revision,onHabits={tab=2},onRecord={logDay=it},onSettings={tab=5},onPlan={journeySection=0;tab=1})
                             else PlanScreen(s,p,r,now,onDay={logDay=it},onEdit={editor=true})
                         2->HabitScreen(activity,now.toLocalDate(),revision,scrollState,onSettings={settingsCategory="权限与后台";tab=5})
-                        5->SettingsScreen(activity,s,r,activity.permissionRevision,settingsCategory,{settingsCategory=it},scrollState,onHabits={tab=2},onEdit={editor=true},onMessage={message=it},onPrivacy={showPrivacy=true})
+                        5->SettingsScreen(activity,s,p,r,activity.permissionRevision,settingsCategory,{settingsCategory=it},scrollState,onHabits={tab=2},onEdit={editor=true},onMessage={message=it},onPrivacy={showPrivacy=true})
                     }
                 }
             }
@@ -130,7 +130,15 @@ class MainActivity : ComponentActivity() {
         else { logDay=null;message="这个夜晚的打卡时间已结束，请查看当前日期。" }
     },onComplete={
         runCatching { s.completeBedtime(day);Alarms.schedule(activity) }
-            .onSuccess { logDay=null;message=if(RestCalendar.isRest(LocalDate.parse(day).plusDays(1))) "睡前打卡已保存。休息日记录已完成，无需起床验证。" else "睡前打卡已保存。醒后完成起床验证，记录会自动接上。" }
+            .onSuccess {
+                logDay=null
+                val morning=LocalDate.parse(day).plusDays(1)
+                message=when {
+                    RestCalendar.isRest(morning) -> "睡前打卡已保存。休息日记录已完成，无需起床验证。"
+                    morning==s.wakePauseDate -> "睡前打卡已保存。次晨的起床闹钟已暂停。"
+                    else -> "睡前打卡已保存。醒后完成起床验证，记录会自动接上。"
+                }
+            }
             .onFailure { message=it.message }
     }) }
     message?.let { text -> AlertDialog(onDismissRequest={message=null},title={Text("廿一")},text={Text(text)},confirmButton={TextButton(onClick={message=null}){Text("知道了")}}) }
@@ -151,6 +159,7 @@ class MainActivity : ComponentActivity() {
 @Composable fun Today(activity:MainActivity,s:Store,p:Plan,r:Rules,now:LocalDateTime,revision:Int,onHabits:()->Unit,onRecord:(String)->Unit,onSettings:()->Unit,onPlan:()->Unit) {
     val recordDate=BedtimeSchedule.recordDay(p,r,now);val day=p.day(recordDate ?: now.toLocalDate());val cycle=p.cycleStart(recordDate ?: now.toLocalDate());val cycleDay=(day-1).coerceAtLeast(0)%21+1; val night=Schedule.night(p,r,now); val wake=s.wake
     val morning=(recordDate ?: now.toLocalDate()).plusDays(1);val restMorning=RestCalendar.isRest(morning)
+    val pausedMorning=morning==s.wakePauseDate
     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
         Column { Eyebrow(now.format(DateTimeFormatter.ofPattern("MM 月 dd 日  ·  EEEE",java.util.Locale.CHINESE))); Heading(if(now.hour<12) "早安，慢慢开始。" else if(now.hour<18) "留一点时间给自己。" else "今晚，好好休息。") }
     }
@@ -159,9 +168,10 @@ class MainActivity : ComponentActivity() {
         Text(r.bedtimeSource(recordDate ?: now.toLocalDate()),fontSize=22.sp,color=Color.White,fontWeight=FontWeight.Medium)
         Row(Modifier.fillMaxWidth().padding(vertical=8.dp),horizontalArrangement=Arrangement.SpaceBetween) {
             Column { SmallLight("${BedtimeSchedule.bedtime(recordDate ?: now.toLocalDate(),r).format(DateTimeFormatter.ofPattern("MM.dd"))} 睡前 / 锁屏"); LargeNumber(timeText(r.bedtime(recordDate ?: now.toLocalDate())),Color.White,43) }
-            Column(horizontalAlignment=Alignment.End) { SmallLight("${morning.format(DateTimeFormatter.ofPattern("MM.dd"))} ${if(restMorning) "参考起床" else "起床"}"); LargeNumber(timeText(r.wakeTime(morning)),Lime,43) }
+            Column(horizontalAlignment=Alignment.End) { SmallLight("${morning.format(DateTimeFormatter.ofPattern("MM.dd"))} ${if(restMorning || pausedMorning) "参考起床" else "起床"}"); LargeNumber(timeText(r.wakeTime(morning)),Lime,43) }
         }
         if(restMorning) SmallLight("休息日自然醒 · 不响起床闹钟，无需强制验证")
+        else if(pausedMorning) SmallLight("这一天的起床闹钟已暂停")
         HorizontalDivider(color=Color.White.copy(alpha=.15f))
         Text(if(night==null) "在约定的时间，把手机放下。" else if(NightAccessibilityService.instance==null) "计划已到时间，应用限制权限尚未开启。" else "夜间限制正在执行，必要应用仍可使用。",fontSize=13.sp,color=Color.White.copy(alpha=.8f))
     }
@@ -185,7 +195,11 @@ class MainActivity : ComponentActivity() {
         HorizontalDivider(color=Sage)
         val morning=s.log(now.toLocalDate().toString())
         Text("${now.format(DateTimeFormatter.ofPattern("MM.dd"))} 醒后记录",fontWeight=FontWeight.Medium)
-        SmallNote(if(morning.verifiedAt>0) "已验证 · ${stamp(morning.verifiedAt)} 自动保存" else "完成全部起床验证后自动记录，无需再次打卡。")
+        SmallNote(when {
+            morning.verifiedAt>0 -> "已验证 · ${stamp(morning.verifiedAt)} 自动保存"
+            now.toLocalDate()==s.wakePauseDate -> "今天的起床闹钟已暂停。"
+            else -> "完成全部起床验证后自动记录，无需再次打卡。"
+        })
     }
     Row(Modifier.fillMaxWidth().clickable(onClick=onPlan),horizontalArrangement=Arrangement.SpaceBetween) { Text("我的 21 天",fontWeight=FontWeight.SemiBold); Text("查看计划  →",color=Moss,fontSize=13.sp) }
     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {

@@ -82,10 +82,27 @@ object Alarms {
         } catch (_: SecurityException) { Notifications.info(c,"闹钟权限已关闭","请在权限检查中重新开启精确闹钟。") }
     }
     fun cancel(c: Context,action: String) { c.getSystemService(AlarmManager::class.java).cancel(pending(c,action));if(action==WAKE)Store(c).prefs.edit().remove("scheduled_wake").apply() }
-    // Apply the rest-day rule at delivery too: upgrades can leave old wake/check callbacks queued.
-    fun clearRestWake(c:Context):Boolean {
+    fun setWakePause(c:Context,date:LocalDate?):Boolean {
+        val s=Store(c)
+        if(date!=null) {
+            s.applyPending()
+            val plan=s.plan ?: return false
+            if(s.wake.hasStarted(date) || !Schedule.canPauseWake(plan,s.rules,date,LocalDateTime.now())) return false
+        }
+        s.wakePauseDate=date
+        schedule(c)
+        return true
+    }
+    fun suppressesSession(wake:WakeSession,pausedDate:LocalDate?,today:LocalDate=LocalDate.now()):Boolean {
+        if(wake.test) return false
+        // A one-day pause must leave an earlier day's active verification in place.
+        val pausedSession=pausedDate!=null && (if(wake.active) wake.hasStarted(pausedDate) else today==pausedDate)
+        return RestCalendar.isRest(today) || pausedSession
+    }
+    // Old wake/check callbacks can still be queued when a date is skipped.
+    fun clearSuppressedWake(c:Context):Boolean {
         val s=Store(c);val w=s.wake
-        if(!RestCalendar.isRest(LocalDate.now()) || w.test) return false
+        if(!suppressesSession(w,s.wakePauseDate)) return false
         if(w.active) s.wake=w.copy(phase=WakePhase.STOPPED,dueAt=0)
         cancel(c,CHECK);c.stopService(Intent(c,WakeAlarmService::class.java))
         c.getSystemService(NotificationManager::class.java).cancel(21)
@@ -98,12 +115,14 @@ object Alarms {
         BedtimeReminders.preparation(c,now)
         val previouslyScheduled=s.prefs.getLong("scheduled_wake",0)
         cancel(c,WAKE); cancel(c,PREP)
-        clearRestWake(c)
+        clearSuppressedWake(c)
         BedtimeLock.schedule(c)
         if(p==null) { RhythmWidget.refresh(c);return }
-        val handled=s.wake.day==now.toLocalDate().toString() && !s.wake.test && s.wake.phase!=WakePhase.IDLE
-        if(!RestCalendar.isRest(now.toLocalDate()) && Schedule.preserveDueWake(previouslyScheduled,System.currentTimeMillis(),handled)) set(c,WAKE,System.currentTimeMillis()+1500)
-        else Schedule.nextWake(p,s.rules,now)?.let { set(c,WAKE,it.epoch()) }
+        val today=now.toLocalDate();val pausedDate=s.wakePauseDate
+        val handled=s.wake.hasStarted(today)
+        val previousDate=Instant.ofEpochMilli(previouslyScheduled).atZone(ZoneId.systemDefault()).toLocalDate()
+        if(!Schedule.skipsWake(today,pausedDate) && previousDate!=pausedDate && Schedule.preserveDueWake(previouslyScheduled,System.currentTimeMillis(),handled)) set(c,WAKE,System.currentTimeMillis()+1500)
+        else Schedule.nextWake(p,s.rules,now,pausedDate)?.let { set(c,WAKE,it.epoch()) }
         Schedule.nextWindDown(p,s.rules,now)?.let { set(c,PREP,it.epoch()) }
         val w=s.wake
         if(w.active && w.dueAt>0) {
@@ -116,14 +135,14 @@ object Alarms {
         RhythmWidget.refresh(c)
     }
     fun start(c: Context,test: Boolean=false) {
-        if(!test && RestCalendar.isRest(LocalDate.now())) { clearRestWake(c);return }
         val s=Store(c); val now=System.currentTimeMillis()
+        if(!test && Schedule.skipsWake(LocalDate.now(),s.wakePauseDate)) { clearSuppressedWake(c);return }
         if(s.wake.active) return
         s.wake=WakeSession(LocalDate.now().toString(),WakePhase.RINGING,now+60_000,1,test=test,id=java.util.UUID.randomUUID().toString())
         ring(c)
     }
     fun ring(c: Context) {
-        if(clearRestWake(c)) return
+        if(clearSuppressedWake(c)) return
         val w=Store(c).wake
         if(!w.active) return
         set(c,CHECK,w.dueAt)
@@ -132,13 +151,13 @@ object Alarms {
         catch (_: SecurityException) { Notifications.info(c,"起床提醒需要权限","请打开 APP 的权限检查。",23) }
     }
     fun begin(c: Context) {
-        if(clearRestWake(c)) return
+        if(clearSuppressedWake(c)) return
         val s=Store(c);if(!s.wake.test) return
         s.wake=s.wake.begin(System.currentTimeMillis())
         c.stopService(Intent(c,WakeAlarmService::class.java)); set(c,CHECK,s.wake.dueAt)
     }
     fun verify(c: Context): Boolean {
-        if(clearRestWake(c)) return false
+        if(clearSuppressedWake(c)) return false
         val s=Store(c); val before=s.wake; val after=before.verify(System.currentTimeMillis(),s.rules)
         if(before==after) return false
         s.wake=after; c.stopService(Intent(c,WakeAlarmService::class.java)); cancel(c,CHECK)
@@ -176,7 +195,7 @@ class AlarmReceiver : BroadcastReceiver() {
         when(intent.action) {
             Alarms.WAKE -> {
                 s.prefs.edit().remove("scheduled_wake").apply()
-                if(RestCalendar.isRest(LocalDate.now())) { Alarms.clearRestWake(c);Alarms.schedule(c);return }
+                if(Schedule.skipsWake(LocalDate.now(),s.wakePauseDate)) { Alarms.schedule(c);return }
                 val w=s.wake
                 if(w.day!=LocalDate.now().toString() || w.phase==WakePhase.IDLE || w.test) {
                     if(w.active) Alarms.stop(c,"新一天开始")
@@ -190,7 +209,7 @@ class AlarmReceiver : BroadcastReceiver() {
             }
             Alarms.BEDTIME_LOCK -> { s.applyPending();BedtimeReminders.due(c);BedtimeLock.enforce(c);Alarms.schedule(c) }
             Alarms.CHECK -> {
-                if(Alarms.clearRestWake(c)) return
+                if(Alarms.clearSuppressedWake(c)) return
                 val w=s.wake
                 if(!w.active || System.currentTimeMillis()+500<w.dueAt) return
                 val next=w.retry(System.currentTimeMillis()); s.wake=next
@@ -213,11 +232,11 @@ class WakeAlarmService : Service() {
     override fun onBind(intent: Intent?) = null
     override fun onStartCommand(intent: Intent?,flags: Int,startId: Int): Int {
         val s=Store(this)
-        if(RestCalendar.isRest(LocalDate.now()) && !s.wake.test) {
+        if(Alarms.suppressesSession(s.wake,s.wakePauseDate)) {
             // A queued startForegroundService still needs its foreground acknowledgement before exit.
             startForeground(21,NotificationCompat.Builder(this,Notifications.ALARM).setSmallIcon(R.drawable.ic_logo)
-                .setContentTitle("休息日自然醒").setSilent(true).build())
-            Alarms.clearRestWake(this);stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();return START_NOT_STICKY
+                .setSilent(true).build())
+            Alarms.clearSuppressedWake(this);stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();return START_NOT_STICKY
         }
         if(!s.wake.ringing) {
             startForeground(21,NotificationCompat.Builder(this,Notifications.ALARM).setSmallIcon(R.drawable.ic_logo).setSilent(true).build())
@@ -248,7 +267,7 @@ class WakeAlarmService : Service() {
         if(s.wake.test) handler.postDelayed({ ringtone?.stop();vibrator.cancel();stopSelf() },55_000)
         else handler.postDelayed(object:Runnable {
             override fun run() {
-                if(!Store(this@WakeAlarmService).wake.ringing || Alarms.clearRestWake(this@WakeAlarmService)) { stopSelf();return }
+                if(!Store(this@WakeAlarmService).wake.ringing || Alarms.clearSuppressedWake(this@WakeAlarmService)) { stopSelf();return }
                 if(lock?.isHeld==true) lock?.release()
                 lock?.acquire(10*60_000L)
                 handler.postDelayed(this,30_000)

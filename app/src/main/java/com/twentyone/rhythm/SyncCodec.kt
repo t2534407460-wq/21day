@@ -14,7 +14,7 @@ internal object SyncCodec {
     val namespaces=listOf("rhythm","coach_chat","coach_voice","coach_reports","habit_reviews","review_settings")
     val types=setOf("habits","sleep_plans","sleep_logs","sleep_events","preferences","ui_layouts","chats","reviews")
     private val sleepKeys=setOf("plan","rules","pending_at","pending_rules","rest_schedule_2026")
-    private val runtime=setOf("wake","emergency_night","pass_package","pass_night","pass_day","pass_count","pass_until","scheduled_wake","habit_alarm_at","habit_reminded","bedtime_at","bedtime_locked_nights")
+    private val runtime=setOf("wake",WAKE_PAUSE_DATE,"emergency_night","pass_package","pass_night","pass_day","pass_count","pass_until","scheduled_wake","habit_alarm_at","habit_reminded","bedtime_at","bedtime_locked_nights")
     fun scope(namespace:String,key:String):String {
         if(namespace!="rhythm")return "project"
         if(key in setOf("qr_token","nfc_id"))return "secret"

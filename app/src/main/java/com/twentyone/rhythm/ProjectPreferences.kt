@@ -150,7 +150,7 @@ internal class TransactionalPreferences(
     private fun scope(key:String):String {
         if(namespace!="rhythm")return "project"
         if(key in setOf("qr_token","nfc_id"))return "secret"
-        if(key in setOf("wake","emergency_night","pass_package","pass_night","pass_day","pass_count","pass_until","scheduled_wake","habit_alarm_at","habit_reminded","habit_timers","bedtime_at","bedtime_locked_nights") ||
+        if(key in setOf("wake",WAKE_PAUSE_DATE,"emergency_night","pass_package","pass_night","pass_day","pass_count","pass_until","scheduled_wake","habit_alarm_at","habit_reminded","habit_timers","bedtime_at","bedtime_locked_nights") ||
             key.startsWith("widget_") || key.startsWith("cards_") || key.startsWith("bedtime_sent_") || key.startsWith("pass_request_"))return "device"
         return "project"
     }

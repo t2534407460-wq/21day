@@ -6,8 +6,13 @@ import org.json.JSONObject
 import java.time.*
 import java.util.UUID
 
+internal const val WAKE_PAUSE_DATE = "wake_pause_date"
+
 class Store(private val context: Context) {
     val prefs = ProjectPreferences.get(context,"rhythm")
+    var wakePauseDate: LocalDate?
+        get() = prefs.getString(WAKE_PAUSE_DATE,null)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        set(value) { prefs.edit().putString(WAKE_PAUSE_DATE,value?.toString()).apply() }
     var keepTaskOnBack: Boolean
         get() = prefs.getBoolean("keep_task_on_back",true)
         set(value) { prefs.edit().putBoolean("keep_task_on_back",value).apply() }

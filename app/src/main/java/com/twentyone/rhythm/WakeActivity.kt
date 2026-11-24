@@ -29,13 +29,13 @@ class WakeActivity:ComponentActivity() {
     private var nfcMessage by mutableStateOf("")
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
-        if(Alarms.clearRestWake(this)) { finish();return }
+        if(Alarms.clearSuppressedWake(this)) { finish();return }
         enableEdgeToEdge();setShowWhenLocked(true);setTurnScreenOn(true)
         setContent { RhythmTheme { WakeScreen(this,nfcMessage) } }
     }
     override fun onResume() {
         super.onResume()
-        if(Alarms.clearRestWake(this)) { finish();return }
+        if(Alarms.clearSuppressedWake(this)) { finish();return }
         NfcAdapter.getDefaultAdapter(this)?.enableReaderMode(this,{tag->
             val id=tag.id.joinToString(""){"%02X".format(it)}
             runOnUiThread { val s=Store(this);nfcMessage=if(id.isNotEmpty()&&id==s.nfcId){if(Alarms.verify(this))"验证已收到" else "尚未到下一次验证时间，或当前没有起床任务"}else "这不是你绑定的起床标签" }
